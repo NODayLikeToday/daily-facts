@@ -1,2 +1,2 @@
-# dailyfacts
+# daily-facts
 Log daily facts 
