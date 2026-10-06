@@ -1,0 +1,3088 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<meta name="theme-color" content="#ffffff" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<title>Daily Facts — Food &amp; Training Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --paper:#ffffff;
+    --ink:#15130d;
+    --muted:#6b6558;
+    --line:#e6e1d6;
+    --cal:#c1401c;
+    --protein:#2f6b3a;
+    --carb:#b8860b;
+    --fat:#3b5b92;
+    --bg:#efece4;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{
+    max-width:460px;
+    margin:0 auto;
+    min-height:100vh;
+    background:var(--paper);
+    box-shadow:0 0 40px rgba(0,0,0,0.06);
+    padding:28px 20px 60px;
+  }
+  header{
+    text-align:center;
+    margin-bottom:22px;
+  }
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.18em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin-bottom:4px;
+  }
+  h1{
+    font-family:'Archivo Black',sans-serif;
+    font-size:30px;
+    letter-spacing:-0.01em;
+    margin:0;
+    line-height:1;
+  }
+  .subhead{
+    font-size:13px;
+    color:var(--muted);
+    margin-top:8px;
+  }
+
+  /* Capture area */
+  .capture-box{
+    border:3px solid var(--ink);
+    border-radius:2px;
+    padding:16px;
+    margin-bottom:18px;
+  }
+  .capture-empty{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:12px;
+    padding:30px 10px;
+    text-align:center;
+  }
+  .capture-empty p{
+    margin:0;
+    color:var(--muted);
+    font-size:13px;
+    max-width:260px;
+  }
+  .btn-row{
+    display:flex;
+    gap:10px;
+    width:100%;
+  }
+  button{
+    font-family:'Inter',sans-serif;
+    font-weight:600;
+    font-size:14px;
+    border:none;
+    cursor:pointer;
+    border-radius:2px;
+    padding:12px 16px;
+    transition:transform .05s ease, opacity .15s ease;
+  }
+  button:active{transform:scale(0.98);}
+  button:disabled{opacity:0.45;cursor:default;}
+  .btn-primary{
+    background:var(--ink);
+    color:var(--paper);
+    flex:1;
+  }
+  .btn-secondary{
+    background:var(--paper);
+    color:var(--ink);
+    border:2px solid var(--ink);
+    flex:1;
+  }
+  .btn-full{width:100%;}
+  input[type=file]{display:none;}
+
+  .preview-wrap{position:relative;}
+  .preview-wrap img{
+    width:100%;
+    display:block;
+    border-radius:2px;
+    max-height:320px;
+    object-fit:cover;
+  }
+  .retake{
+    position:absolute;
+    top:8px;right:8px;
+    background:rgba(21,19,13,0.75);
+    color:#fff;
+    font-size:11px;
+    font-family:'IBM Plex Mono',monospace;
+    padding:6px 10px;
+    border-radius:2px;
+    letter-spacing:0.05em;
+  }
+  .estimate-row{margin-top:12px;}
+
+  .describe-box{margin-top:14px;}
+  .describe-divider{
+    text-align:center;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin-bottom:10px;
+  }
+  .describe-box textarea{
+    width:100%;
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+    border:1.5px solid var(--ink);
+    border-radius:2px;
+    padding:10px;
+    resize:vertical;
+    color:var(--ink);
+    margin-bottom:8px;
+  }
+  .describe-box textarea:focus{outline:none;}
+
+  .status-line{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:var(--muted);
+    text-align:center;
+    margin:10px 0 2px;
+    min-height:16px;
+  }
+  .status-line.err{color:var(--cal);}
+
+  /* Nutrition Facts panel */
+  .facts{
+    border:4px solid var(--ink);
+    padding:10px 14px 14px;
+    margin-top:20px;
+  }
+  .facts-title{
+    font-family:'Archivo Black',sans-serif;
+    font-size:26px;
+    line-height:1;
+    padding-bottom:6px;
+  }
+  .facts input.food-name{
+    font-family:'Archivo Black',sans-serif;
+    font-size:26px;
+    line-height:1;
+    border:none;
+    width:100%;
+    padding:0 0 6px;
+    background:transparent;
+    color:var(--ink);
+  }
+  .facts input.serving{
+    font-family:'Inter',sans-serif;
+    font-size:12px;
+    color:var(--muted);
+    border:none;
+    width:100%;
+    background:transparent;
+    padding-bottom:6px;
+  }
+  .rule-thick{border-top:8px solid var(--ink);margin:2px 0 6px;}
+  .rule-med{border-top:4px solid var(--ink);margin:6px 0;}
+  .rule-thin{border-top:1px solid var(--line);margin:8px 0;}
+
+  .cal-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    padding:4px 0 8px;
+  }
+  .cal-row .label{
+    font-family:'Archivo Black',sans-serif;
+    font-size:17px;
+  }
+  .cal-row .value{
+    display:flex;
+    justify-content:flex-end;
+    align-items:baseline;
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:700;
+    font-size:26px;
+    color:var(--cal);
+  }
+  .total-num{
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:600;
+    font-size:15px;
+    color:var(--ink);
+  }
+  .cal-row input{
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:700;
+    font-size:26px;
+    border:none;
+    background:transparent;
+    width:90px;
+    text-align:right;
+    color:var(--cal);
+  }
+  .macro-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:7px 0;
+    border-bottom:1px solid var(--line);
+  }
+  .macro-row:last-of-type{border-bottom:none;}
+  .macro-label{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:13px;
+    font-weight:600;
+  }
+  .dot{width:9px;height:9px;border-radius:50%;flex:none;}
+  .dot.protein{background:var(--protein);}
+  .dot.carb{background:var(--carb);}
+  .dot.fat{background:var(--fat);}
+  .macro-row input{
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:600;
+    font-size:15px;
+    border:none;
+    background:transparent;
+    width:60px;
+    text-align:right;
+  }
+  .unit{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted);margin-left:2px;}
+
+  .notes{
+    font-size:11px;
+    color:var(--muted);
+    font-style:italic;
+    margin-top:10px;
+    line-height:1.4;
+  }
+
+  /* Meal type selector */
+  .meal-select{
+    display:flex;
+    gap:6px;
+    margin:2px 0 4px;
+    flex-wrap:wrap;
+  }
+  .meal-pill{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    padding:6px 10px;
+    border:1.5px solid var(--ink);
+    border-radius:2px;
+    background:var(--paper);
+    color:var(--ink);
+    cursor:pointer;
+  }
+  .meal-pill.active{
+    background:var(--ink);
+    color:var(--paper);
+  }
+
+  /* Itemized ingredients */
+  .items-section{margin-top:4px;}
+  .items-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin-bottom:6px;
+  }
+  .item-row{
+    border-bottom:1px solid var(--line);
+    padding:8px 0;
+  }
+  .item-top{
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .item-top input.item-name{
+    flex:1;
+    font-family:'Inter',sans-serif;
+    font-weight:600;
+    font-size:13px;
+    border:none;
+    background:transparent;
+    color:var(--ink);
+    min-width:0;
+  }
+  .item-top input.item-qty{
+    width:64px;
+    font-family:'Inter',sans-serif;
+    font-size:12px;
+    color:var(--muted);
+    border:none;
+    background:transparent;
+    text-align:right;
+  }
+  .item-remove{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:14px;
+    color:var(--muted);
+    background:transparent;
+    border:none;
+    padding:2px 4px;
+    cursor:pointer;
+    flex:none;
+  }
+  .item-lookup{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--ink);
+    background:var(--paper);
+    border:1.5px solid var(--ink);
+    border-radius:2px;
+    padding:3px 7px;
+    cursor:pointer;
+    flex:none;
+    white-space:nowrap;
+  }
+  .item-lookup:disabled{opacity:0.5;cursor:default;}
+  .log-item .reuse-btn{padding:5px 7px;}
+  .item-macros{
+    display:flex;
+    gap:14px;
+    margin-top:4px;
+  }
+  .item-macro-field{
+    display:flex;
+    flex-direction:column;
+  }
+  .item-macro-field label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:9px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    color:var(--muted);
+  }
+  .item-macro-field input{
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:600;
+    font-size:13px;
+    border:none;
+    background:transparent;
+    width:52px;
+    color:var(--ink);
+  }
+  .item-macro-field.cal input{color:var(--cal);}
+  .item-macro-field.protein input{color:var(--protein);}
+  .item-macro-field.carb input{color:var(--carb);}
+  .item-macro-field.fat input{color:var(--fat);}
+  .add-item-btn{
+    width:100%;
+    background:var(--paper);
+    border:1.5px dashed var(--muted);
+    color:var(--muted);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    padding:9px;
+    margin-top:6px;
+    border-radius:2px;
+  }
+
+  .save-row{margin-top:16px;display:flex;gap:10px;}
+
+  /* History */
+  .history{margin-top:36px;}
+  .history h2{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--muted);
+    border-bottom:2px solid var(--ink);
+    padding-bottom:6px;
+    margin-bottom:10px;
+  }
+  .log-item{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:10px 0;
+    border-bottom:1px solid var(--line);
+    font-size:13px;
+    gap:8px;
+  }
+  .log-item-delete{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:13px;
+    color:var(--muted);
+    background:transparent;
+    border:none;
+    padding:4px 6px;
+    cursor:pointer;
+    flex:none;
+  }
+  .log-item-delete:hover{color:var(--cal);}
+  .log-item-delete:disabled{opacity:0.4;cursor:default;}
+  .log-item .name{font-weight:600;}
+  .log-item .meta{color:var(--muted);font-size:11px;font-family:'IBM Plex Mono',monospace;}
+  .log-item .macros{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:var(--muted);
+    text-align:right;
+  }
+  .empty-hist{color:var(--muted);font-size:13px;padding:14px 0;text-align:center;}
+
+  .config-warning{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    background:#fff6ea;
+    border:1px solid var(--carb);
+    color:#5c4108;
+    padding:10px 12px;
+    border-radius:2px;
+    margin-bottom:18px;
+    line-height:1.5;
+  }
+
+  /* User selector */
+  .user-row{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    margin-bottom:16px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    color:var(--muted);
+  }
+  .user-row select{
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:600;
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    color:var(--ink);
+    background:var(--paper);
+    border:1.5px solid var(--ink);
+    border-radius:2px;
+    padding:5px 8px;
+  }
+
+  /* Training day toggle */
+  .daytype-row{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    margin-bottom:20px;
+  }
+  .daytype-row .daytype-label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    color:var(--muted);
+  }
+
+  /* Progress vs goal */
+  .progress-section{
+    border:3px solid var(--ink);
+    padding:14px;
+    margin-bottom:20px;
+  }
+  .progress-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:12px;
+  }
+  .progress-header h2{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin:0;
+  }
+  .daytype-tag{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    background:var(--ink);
+    color:var(--paper);
+    padding:3px 8px;
+    border-radius:2px;
+  }
+  .progress-row{margin-bottom:12px;}
+  .progress-row:last-child{margin-bottom:0;}
+  .progress-row-top{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    margin-bottom:4px;
+  }
+  .progress-row-top .p-label{
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    color:var(--ink);
+  }
+  .progress-row-top .p-nums{color:var(--muted);}
+  .progress-track{
+    height:8px;
+    background:var(--line);
+    border-radius:2px;
+    overflow:hidden;
+  }
+  .progress-fill{
+    height:100%;
+    border-radius:2px;
+  }
+  .progress-nogoal{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--muted);
+    font-style:italic;
+  }
+
+  /* Goals editor */
+  .goals-editor{
+    border:1.5px solid var(--ink);
+    border-radius:2px;
+    padding:0 14px;
+    margin-bottom:20px;
+  }
+  .goals-editor summary{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--ink);
+    padding:12px 0;
+    cursor:pointer;
+  }
+  .goals-editor[open] summary{border-bottom:1px solid var(--line);}
+  .goals-grid{
+    display:flex;
+    gap:16px;
+    padding:14px 0;
+  }
+  .goals-col{flex:1;}
+  .goals-col h3{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin:0 0 8px;
+  }
+  .goals-col label{
+    display:block;
+    font-size:11px;
+    color:var(--muted);
+    margin-bottom:8px;
+  }
+  .goals-col input{
+    display:block;
+    width:100%;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:14px;
+    border:none;
+    border-bottom:1.5px solid var(--line);
+    padding:4px 0;
+    margin-top:2px;
+    color:var(--ink);
+  }
+  .goals-col input:focus{outline:none;border-bottom-color:var(--ink);}
+  #saveGoalsBtn{margin-bottom:14px;}
+
+  /* Weekly list */
+  .week-section{
+    border:3px solid var(--ink);
+    padding:14px;
+    margin-bottom:20px;
+  }
+  .week-section-title{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin:0 0 10px;
+  }
+  .week-day-row{
+    width:100%;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    background:transparent;
+    border:none;
+    border-bottom:1px solid var(--line);
+    padding:9px 0;
+    text-align:left;
+    cursor:pointer;
+  }
+  .week-day-row:last-child{border-bottom:none;}
+  .week-day-row .wd-date{
+    font-size:13px;
+    font-weight:600;
+  }
+  .week-day-row .wd-macros{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--muted);
+    text-align:right;
+  }
+  .week-day-row.active .wd-date{color:var(--cal);}
+
+  /* Tabs */
+  .tabs{
+    display:flex;
+    border-bottom:3px solid var(--ink);
+    margin-bottom:20px;
+  }
+  .tab-btn{
+    flex:1;
+    background:var(--paper);
+    border:none;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    font-weight:600;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--muted);
+    padding:10px 0;
+    border-bottom:3px solid transparent;
+    margin-bottom:-3px;
+  }
+  .tab-btn.active{
+    color:var(--ink);
+    border-bottom:3px solid var(--ink);
+  }
+
+  /* Stats dashboard */
+  .stat-cards{
+    display:flex;
+    gap:10px;
+    margin-bottom:24px;
+  }
+  .stat-card{
+    flex:1;
+    border:3px solid var(--ink);
+    padding:12px 14px;
+  }
+  .stat-card .stat-label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin-bottom:6px;
+  }
+  .stat-card .stat-cal{
+    font-family:'Archivo Black',sans-serif;
+    font-size:26px;
+    color:var(--cal);
+    line-height:1;
+  }
+  .stat-card .stat-cal-unit{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--muted);
+    margin-left:4px;
+  }
+  .stat-card .stat-macros{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--muted);
+    margin-top:8px;
+  }
+
+  .day-lookup{
+    border:3px solid var(--ink);
+    padding:14px;
+  }
+  .day-lookup-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:12px;
+    gap:10px;
+  }
+  .day-lookup-header h2{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin:0;
+  }
+  .day-lookup-header input[type=date]{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    border:1.5px solid var(--ink);
+    border-radius:2px;
+    padding:5px 8px;
+    background:var(--paper);
+    color:var(--ink);
+  }
+  .day-totals{
+    display:flex;
+    justify-content:space-between;
+    padding:10px 0;
+    border-top:1px solid var(--line);
+    border-bottom:1px solid var(--line);
+    margin-bottom:14px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+  }
+  .day-totals .dt-item{text-align:center;flex:1;}
+  .day-totals .dt-value{font-size:16px;font-weight:700;display:block;}
+  .day-totals .dt-label{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:0.06em;}
+  .chart-wrap{position:relative;height:180px;margin-bottom:14px;}
+  .day-entries .log-item{padding:8px 0;}
+  .stats-empty{color:var(--muted);font-size:13px;padding:20px 0;text-align:center;}
+
+  /* ================= Training (merged from Workout Tracker) ================= */
+  :root{
+    --push:#c1401c;
+    --pull:#2f6b3a;
+    --legs:#3b5b92;
+    --walk:#b8860b;
+  }
+  .tab-btn{font-size:11px;letter-spacing:0.08em;background:transparent;}
+
+  /* Shared form fields in the house style */
+  .field{display:block;margin-bottom:12px;}
+  .field-label{
+    display:block;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin-bottom:3px;
+  }
+  .field input,.field textarea,.field select,select.field-select{
+    display:block;
+    width:100%;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:15px;
+    font-weight:600;
+    color:var(--ink);
+    background:transparent;
+    border:none;
+    border-bottom:1.5px solid var(--line);
+    border-radius:0;
+    padding:5px 0;
+  }
+  .field textarea{font-family:'Inter',sans-serif;font-weight:400;font-size:14px;resize:vertical;}
+  .field input:focus,.field textarea:focus,.field select:focus{outline:none;border-bottom-color:var(--ink);}
+  .field-row{display:flex;gap:16px;}
+  .field-row .field{flex:1;}
+  select.field-select{
+    border:1.5px solid var(--ink);
+    border-radius:2px;
+    padding:8px 10px;
+    font-size:13px;
+    background:var(--paper);
+    -webkit-appearance:none;
+    appearance:none;
+    background-image:linear-gradient(45deg,transparent 50%,var(--ink) 50%),linear-gradient(135deg,var(--ink) 50%,transparent 50%);
+    background-position:calc(100% - 16px) 50%,calc(100% - 11px) 50%;
+    background-size:5px 5px;
+    background-repeat:no-repeat;
+  }
+
+  /* Today's training card */
+  .train-hero{text-align:center;padding:18px 6px 6px;}
+  .train-hero .eyebrow{margin-bottom:6px;}
+  .train-hero .hero-title{
+    font-family:'Archivo Black',sans-serif;
+    font-size:40px;
+    line-height:1;
+    color:var(--day-color, var(--ink));
+  }
+  .train-hero .hero-sub{font-size:13px;color:var(--muted);margin:8px 0 16px;}
+  .train-hero .meal-select{justify-content:center;margin-bottom:14px;}
+  .walk-strip{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    border-top:1px solid var(--line);
+    margin-top:16px;
+    padding-top:12px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    color:var(--muted);
+  }
+  .walk-strip.done{color:var(--protein);}
+  .btn-sm{padding:7px 12px;font-size:12px;flex:none;}
+
+  /* Session editor (Facts panel variant) */
+  .facts .facts-sub{font-size:12px;color:var(--muted);padding-bottom:6px;}
+  .facts .facts-title{color:var(--day-color, var(--ink));}
+  .duration-inputs{display:flex;align-items:baseline;gap:4px;}
+  .duration-inputs input{
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:700;
+    font-size:22px;
+    border:none;
+    border-bottom:1.5px solid var(--line);
+    background:transparent;
+    width:52px;
+    text-align:right;
+    color:var(--ink);
+  }
+  .duration-inputs input:focus{outline:none;border-bottom-color:var(--ink);}
+  .duration-inputs .unit{margin-right:6px;}
+  .session-notes{
+    width:100%;
+    font-family:'Inter',sans-serif;
+    font-size:13px;
+    border:none;
+    border-bottom:1.5px solid var(--line);
+    padding:6px 0;
+    resize:vertical;
+    color:var(--ink);
+    background:transparent;
+  }
+  .session-notes:focus{outline:none;border-bottom-color:var(--ink);}
+  .add-ex-row{display:flex;gap:8px;margin:4px 0 6px;}
+  .add-ex-row select{flex:1;min-width:0;}
+  .add-ex-row input{
+    flex:1;min-width:0;
+    font-family:'Inter',sans-serif;font-size:13px;
+    border:1.5px solid var(--ink);border-radius:2px;padding:8px 10px;
+  }
+  .ex-group{border-top:2px solid var(--ink);margin-top:14px;padding-top:8px;}
+  .ex-head{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .ex-name{font-weight:700;font-size:14px;}
+  .ex-count{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);}
+  .set-row{
+    display:flex;
+    align-items:flex-start;
+    gap:8px;
+    padding:8px 0;
+    border-bottom:1px solid var(--line);
+  }
+  .set-num{
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:700;
+    font-size:12px;
+    width:18px;
+    padding-top:16px;
+    color:var(--muted);
+    flex:none;
+  }
+  .set-body{flex:1;min-width:0;}
+  .set-fields{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;}
+  .set-fields .item-macro-field input{width:56px;font-size:15px;border-bottom:1.5px solid var(--line);}
+  .set-fields .item-macro-field input:focus{outline:none;border-bottom-color:var(--ink);}
+  .effort{display:flex;gap:4px;margin-left:auto;}
+  .effort-btn{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    letter-spacing:0.04em;
+    padding:5px 6px;
+    border:1.5px solid var(--ink);
+    background:var(--paper);
+    color:var(--ink);
+    border-radius:2px;
+  }
+  .effort-btn.active{background:var(--ink);color:var(--paper);}
+  .set-note{
+    width:100%;
+    margin-top:6px;
+    font-family:'Inter',sans-serif;
+    font-size:12px;
+    color:var(--muted);
+    border:none;
+    background:transparent;
+    padding:2px 0;
+  }
+  .set-note:focus{outline:none;color:var(--ink);}
+  .last-time{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);margin-top:2px;}
+  .btn-danger-text{
+    background:transparent;
+    color:var(--cal);
+    border:2px solid var(--cal);
+    flex:none;
+  }
+
+  /* Session / walk lists reuse .log-item; add a coloured type tag */
+  .type-tag{
+    display:inline-block;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    color:var(--paper);
+    background:var(--day-color, var(--ink));
+    padding:2px 6px;
+    border-radius:2px;
+    margin-right:6px;
+    vertical-align:1px;
+  }
+  .log-item.clickable{cursor:pointer;}
+  .log-item .actions{display:flex;flex:none;}
+  .log-item .note-preview{color:var(--muted);font-size:11px;margin-top:2px;}
+
+  /* Stats sub-view picker */
+  .stats-switch{display:flex;gap:6px;justify-content:center;margin-bottom:18px;}
+  .stat-cards.three .stat-card{padding:12px 10px;}
+  .stat-cards.three .stat-cal{font-size:22px;}
+  .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;}
+  .stat-grid .stat-card{flex:none;border-width:1.5px;}
+  .stat-grid .stat-cal{font-size:22px;}
+  .chart-box{border:3px solid var(--ink);padding:14px;margin-bottom:20px;}
+  .chart-box .chart-wrap{margin-bottom:0;}
+
+  /* Sign-in */
+  .auth-help{font-size:13px;color:var(--muted);margin:0 0 14px;}
+  .signout-btn{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    color:var(--muted);
+    background:transparent;
+    border:none;
+    padding:5px 4px;
+    text-decoration:underline;
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <header>
+    <div class="eyebrow">Food · Lifting · Walking</div>
+    <h1>DAILY FACTS</h1>
+    <div class="subhead">Eat. Lift. Walk. Log it.</div>
+  </header>
+
+  <div id="configWarning"></div>
+
+  <!-- ===================== SIGN IN ===================== -->
+  <div id="authGate" style="display:none;">
+    <form class="capture-box" id="signInForm" autocomplete="on">
+      <div class="facts-title" style="font-size:22px;padding-bottom:6px;">Sign in</div>
+      <p class="auth-help">Household only. You'll stay signed in on this device.</p>
+      <label class="field"><span class="field-label">Email</span>
+        <input type="email" id="authEmail" name="email" autocomplete="username" inputmode="email" placeholder="you@example.com" required />
+      </label>
+      <label class="field"><span class="field-label">Password</span>
+        <input type="password" id="authPassword" name="password" autocomplete="current-password" required />
+      </label>
+      <button type="submit" class="btn-primary btn-full" id="signInBtn">Sign in</button>
+    </form>
+    <div class="status-line" id="authStatus"></div>
+  </div>
+
+  <div id="appBody" style="display:none;">
+  <div class="user-row">
+    Logging as
+    <select id="userSelect">
+      <option value="Nick">Nick</option>
+      <option value="Ashleigh">Ashleigh</option>
+    </select>
+    <button type="button" class="signout-btn" id="signOutBtn" title="Sign out">Sign out</button>
+  </div>
+
+  <div class="daytype-row" id="dayTypeRow">
+    <span class="daytype-label">Today:</span>
+    <button type="button" class="meal-pill" data-daytype="rest">Rest Day</button>
+    <button type="button" class="meal-pill" data-daytype="training">Training Day</button>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button type="button" class="tab-btn active" data-tab="log">Food</button>
+    <button type="button" class="tab-btn" data-tab="lift">Lift</button>
+    <button type="button" class="tab-btn" data-tab="walk">Walk</button>
+    <button type="button" class="tab-btn" data-tab="stats">Stats</button>
+  </div>
+
+  <!-- ===================== LIFT ===================== -->
+  <div id="liftTab" style="display:none;">
+    <div id="liftMain"></div>
+    <div class="status-line"></div>
+    <div class="history">
+      <h2>Recent Workouts</h2>
+      <div id="sessionList"><div class="empty-hist">No workouts yet.</div></div>
+    </div>
+  </div>
+
+  <!-- ===================== WALK ===================== -->
+  <div id="walkTab" style="display:none;">
+    <div class="capture-box">
+      <div class="facts-title" id="walkFormTitle" style="font-size:22px;padding-bottom:12px;">Log a Walk</div>
+      <div class="field-row">
+        <label class="field"><span class="field-label">Date</span><input type="date" id="walkDate" /></label>
+        <label class="field"><span class="field-label">Miles</span><input type="number" id="walkMiles" inputmode="decimal" step="0.1" min="0" placeholder="2.0" /></label>
+        <label class="field"><span class="field-label">Minutes</span><input type="number" id="walkMinutes" inputmode="numeric" min="0" placeholder="30" /></label>
+      </div>
+      <label class="field"><span class="field-label">Notes</span><textarea id="walkNotes" rows="2" placeholder="Evening loop, felt good"></textarea></label>
+      <div class="btn-row">
+        <button type="button" class="btn-primary" id="saveWalkBtn">Log Walk</button>
+        <button type="button" class="btn-secondary" id="cancelWalkBtn" style="display:none;">Cancel</button>
+      </div>
+    </div>
+    <div class="status-line"></div>
+    <div class="history" style="margin-top:24px;">
+      <h2>Recent Walks</h2>
+      <div id="walkList"><div class="empty-hist">No walks yet.</div></div>
+    </div>
+  </div>
+
+  <!-- ===================== FOOD ===================== -->
+  <div id="logTab">
+    <div class="capture-box" id="captureBox">
+      <div class="capture-empty" id="captureEmpty">
+        <p>Take a photo of your plate, or upload one, to get a macro estimate.</p>
+        <div class="btn-row">
+          <button class="btn-secondary" id="cameraBtn">Take Photo</button>
+          <button class="btn-secondary" id="uploadBtn">Upload</button>
+        </div>
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" />
+        <input type="file" id="uploadInput" accept="image/*" />
+      </div>
+      <div class="preview-wrap" id="previewWrap" style="display:none;">
+        <img id="previewImg" alt="Plate preview" />
+        <div class="retake" id="retakeBtn">RETAKE</div>
+      </div>
+      <div class="estimate-row" id="estimateRow" style="display:none;">
+        <button class="btn-primary btn-full" id="estimateBtn">Estimate Macros</button>
+      </div>
+    </div>
+
+    <div class="describe-box">
+      <div class="describe-divider">— or describe it —</div>
+      <textarea id="descriptionInput" rows="2" placeholder="e.g. Grilled chicken breast with a cup of rice and steamed broccoli"></textarea>
+      <button class="btn-secondary btn-full" id="describeBtn">Estimate from Description</button>
+    </div>
+
+    <div class="status-line" id="statusLine"></div>
+
+    <div id="factsPanel"></div>
+
+    <div class="history">
+      <h2>Recent Plates</h2>
+      <div id="historyList"><div class="empty-hist">No entries yet.</div></div>
+    </div>
+  </div>
+
+  <!-- ===================== STATS ===================== -->
+  <div id="statsTab" style="display:none;">
+    <div class="status-line" style="margin-top:-8px;"></div>
+    <div class="stats-switch" id="statsSwitch">
+      <button type="button" class="meal-pill active" data-stats="nutrition">Nutrition</button>
+      <button type="button" class="meal-pill" data-stats="lift">Lifting</button>
+      <button type="button" class="meal-pill" data-stats="walk">Walking</button>
+    </div>
+
+    <div id="statsLift" style="display:none;">
+      <div class="stat-cards three">
+        <div class="stat-card">
+          <div class="stat-label">Workouts 7d</div>
+          <div><span class="stat-cal" id="liftWeekCount" style="color:var(--ink)">0</span></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Sets 7d</div>
+          <div><span class="stat-cal" id="liftWeekSets" style="color:var(--ink)">0</span></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Workouts 30d</div>
+          <div><span class="stat-cal" id="liftMonthCount" style="color:var(--ink)">0</span></div>
+        </div>
+      </div>
+      <div class="chart-box">
+        <div class="day-lookup-header">
+          <h2>Max Weight</h2>
+        </div>
+        <select class="field-select" id="progressExercise" style="margin-bottom:12px;"></select>
+        <div id="liftChartArea"><div class="stats-empty">Pick an exercise.</div></div>
+        <div id="liftChartStats"></div>
+      </div>
+    </div>
+
+    <div id="statsWalk" style="display:none;">
+      <div class="stat-cards">
+        <div class="stat-card">
+          <div class="stat-label">Last 7 Days</div>
+          <div><span class="stat-cal" id="walkWeekMiles" style="color:var(--walk)">0</span><span class="stat-cal-unit">mi</span></div>
+          <div class="stat-macros" id="walkWeekMeta">0 walks</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Last 30 Days</div>
+          <div><span class="stat-cal" id="walkMonthMiles" style="color:var(--walk)">0</span><span class="stat-cal-unit">mi</span></div>
+          <div class="stat-macros" id="walkMonthMeta">0 walks</div>
+        </div>
+      </div>
+      <div class="chart-box">
+        <div class="day-lookup-header"><h2>Miles · Last 30 Days</h2></div>
+        <div class="chart-wrap"><canvas id="walkChart"></canvas></div>
+        <div class="stat-grid" id="walkAllTime"></div>
+      </div>
+    </div>
+
+    <div id="statsNutrition">
+    <div class="stat-cards">
+      <div class="stat-card">
+        <div class="stat-label">Today</div>
+        <div><span class="stat-cal" id="todayCal">0</span><span class="stat-cal-unit">kcal</span></div>
+        <div class="stat-macros" id="todayMacros">P0 · C0 · F0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Last 7 Days</div>
+        <div><span class="stat-cal" id="weekCal">0</span><span class="stat-cal-unit">kcal</span></div>
+        <div class="stat-macros" id="weekMacros">P0 · C0 · F0</div>
+      </div>
+    </div>
+
+    <div class="progress-section">
+      <div class="progress-header">
+        <h2>Today vs Goal</h2>
+        <span class="daytype-tag" id="dayTypeTag">Rest Day</span>
+      </div>
+      <div id="progressBars"></div>
+    </div>
+
+    <details class="goals-editor">
+      <summary>Edit Goals</summary>
+      <div class="goals-grid">
+        <div class="goals-col">
+          <h3>Rest Day</h3>
+          <label>Calories<input type="number" id="goalRestCal" /></label>
+          <label>Protein g<input type="number" id="goalRestProtein" /></label>
+          <label>Net Carbs g<input type="number" id="goalRestCarb" /></label>
+          <label>Fat g<input type="number" id="goalRestFat" /></label>
+        </div>
+        <div class="goals-col">
+          <h3>Training Day</h3>
+          <label>Calories<input type="number" id="goalTrainCal" /></label>
+          <label>Protein g<input type="number" id="goalTrainProtein" /></label>
+          <label>Net Carbs g<input type="number" id="goalTrainCarb" /></label>
+          <label>Fat g<input type="number" id="goalTrainFat" /></label>
+        </div>
+      </div>
+      <button type="button" class="btn-primary btn-full" id="saveGoalsBtn">Save Goals</button>
+    </details>
+
+    <div class="week-section">
+      <div class="week-section-title">Last 7 Days</div>
+      <div id="weekList"></div>
+    </div>
+
+    <div class="day-lookup">
+      <div class="day-lookup-header">
+        <h2>Day Lookup</h2>
+        <input type="date" id="dayPicker" />
+      </div>
+      <div class="day-totals" id="dayTotals">
+        <div class="dt-item"><span class="dt-value" id="dtCal">0</span><span class="dt-label">Kcal</span></div>
+        <div class="dt-item"><span class="dt-value" id="dtProtein">0</span><span class="dt-label">Protein g</span></div>
+        <div class="dt-item"><span class="dt-value" id="dtCarb">0</span><span class="dt-label">Net Carbs g</span></div>
+        <div class="dt-item"><span class="dt-value" id="dtFat">0</span><span class="dt-label">Fat g</span></div>
+      </div>
+      <div class="chart-wrap"><canvas id="dayChart"></canvas></div>
+      <div class="day-entries" id="dayEntries"></div>
+    </div>
+    </div><!-- /statsNutrition -->
+  </div>
+  </div><!-- /appBody -->
+
+</div>
+
+<script>
+/* ====================== CONFIGURE THIS ======================
+   The NEW Daily Facts Supabase project (Project Settings → API).
+   The key below is public by design — the database only answers
+   signed-in household members (sql/01_schema.sql), so it is safe
+   to commit. Use the "publishable" key, or the legacy "anon" key.
+     food     → plate_logs, day_type, user_goals
+     training → workout_sessions, exercise_sets, walks
+   Edge functions: estimate-macros, lookup-item, heartbeat
+================================================================ */
+const SUPABASE_URL = "https://zokwexhvloywahxlyrgw.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpva3dleGh2bG95d2FoeGx5cmd3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEyNTA4ODcsImV4cCI6MjEwNjgyNjg4N30.t5O38m5Zzf9Y0PS8X3mrKXoCOLCsd-Tcdr-_atRKUzQ";
+/* ============================================================== */
+
+// Who may sign in. Mirrors public.is_household() in the SQL and
+// the HOUSEHOLD list in each Gemini edge function — the server copies are
+// what actually enforce it; this one just gives a friendly message.
+const HOUSEHOLD = { "nickoday@hotmail.com": "Nick", "ebeagle2@yahoo.com": "Ashleigh" };
+
+const isConfigured = !SUPABASE_URL.includes("YOUR_") && !SUPABASE_ANON_KEY.includes("YOUR_");
+let supabaseClient = null;
+if (isConfigured) {
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+} else {
+  document.getElementById("configWarning").innerHTML =
+    '<div class="config-warning">⚠ Supabase isn\'t configured yet. Open index.html and set SUPABASE_URL and SUPABASE_ANON_KEY at the top of the &lt;script&gt; tag.</div>';
+}
+
+const MEAL_TYPES = ["Breakfast", "Lunch", "Dinner", "Snack", "Drinks"];
+const USERS = ["Nick", "Ashleigh"];
+let itemSeq = 0;
+const newItemId = () => "item_" + (++itemSeq) + "_" + Date.now();
+
+const state = {
+  file: null,
+  base64: null,
+  mediaType: null,
+  estimate: null, // {food_name, confidence_note}
+  items: [],      // [{id, name, quantity, calories, protein_g, carbs_g, fat_g}]
+  mealType: null,
+  totals: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+  currentUser: "Nick",
+  activeTab: "log",
+};
+
+const el = (id) => document.getElementById(id);
+const statusLine = el("statusLine");
+// Each tab has its own status line; messages go to whichever tab is showing.
+const TAB_PANELS = { log: "logTab", lift: "liftTab", walk: "walkTab", stats: "statsTab" };
+const setStatus = (msg, isErr=false) => {
+  const panel = el(TAB_PANELS[state.activeTab] || "logTab");
+  const line = (panel && panel.querySelector(".status-line")) || statusLine;
+  line.textContent = msg || "";
+  line.classList.toggle("err", !!isErr);
+};
+
+// ---- Which user is logging right now ----
+// Priority: ?user= URL param > last choice remembered on this device > Nick.
+function resolveInitialUser(){
+  const params = new URLSearchParams(window.location.search);
+  const fromUrl = params.get("user");
+  if (fromUrl) {
+    const match = USERS.find(u => u.toLowerCase() === fromUrl.toLowerCase());
+    if (match) return match;
+  }
+  try {
+    const stored = localStorage.getItem("plateFactsUser");
+    if (stored && USERS.includes(stored)) return stored;
+  } catch (e) { /* localStorage unavailable, ignore */ }
+  return null; // decided after sign-in (defaults to whoever signed in)
+}
+
+// Mirror a UI choice into the URL (no reload) so a refresh or bookmark
+// reopens the same user/tab instead of whatever the old URL said.
+function setUrlParam(key, value){
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set(key, value);
+    history.replaceState(null, "", url);
+  } catch (e) { /* e.g. sandboxed iframe — ignore */ }
+}
+
+state.currentUser = resolveInitialUser() || USERS[0];
+el("userSelect").value = state.currentUser;
+el("userSelect").addEventListener("change", (e) => {
+  state.currentUser = e.target.value;
+  try { localStorage.setItem("plateFactsUser", state.currentUser); } catch (e) { /* ignore */ }
+  setUrlParam("user", state.currentUser.toLowerCase());
+  loadHistory();
+  loadDayType();
+  onTrainingUserChange();
+  if (state.activeTab === "stats") refreshActiveStats();
+});
+
+// ---- Tabs ----
+
+function showTab(tab){
+  state.activeTab = tab;
+  el("tabs").querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  Object.entries(TAB_PANELS).forEach(([t, id]) => { el(id).style.display = t === tab ? "block" : "none"; });
+  try { localStorage.setItem("dailyFactsTab", tab); } catch (e) { /* ignore */ }
+  if (new URLSearchParams(window.location.search).has("tab")) setUrlParam("tab", tab === "log" ? "food" : tab);
+  if (tab === "stats") refreshActiveStats();
+  if (tab === "lift") renderLiftMain();
+  setStatus("");
+}
+
+el("tabs").addEventListener("click", (e) => {
+  const btn = e.target.closest(".tab-btn");
+  if (!btn) return;
+  showTab(btn.dataset.tab);
+});
+
+// ---- Stats sub-views (Nutrition / Lifting / Walking) ----
+state.statsView = "nutrition";
+el("statsSwitch").addEventListener("click", (e) => {
+  const btn = e.target.closest(".meal-pill");
+  if (!btn) return;
+  state.statsView = btn.dataset.stats;
+  el("statsSwitch").querySelectorAll(".meal-pill").forEach(b => b.classList.toggle("active", b === btn));
+  refreshActiveStats();
+});
+
+function refreshActiveStats(){
+  el("statsNutrition").style.display = state.statsView === "nutrition" ? "block" : "none";
+  el("statsLift").style.display = state.statsView === "lift" ? "block" : "none";
+  el("statsWalk").style.display = state.statsView === "walk" ? "block" : "none";
+  if (state.statsView === "nutrition") refreshStats();
+  else if (state.statsView === "lift") refreshLiftStats();
+  else refreshWalkStats();
+}
+
+function guessMealType(){
+  const h = new Date().getHours();
+  if (h < 11) return "Breakfast";
+  if (h < 15) return "Lunch";
+  if (h < 21) return "Dinner";
+  return "Snack";
+}
+
+// ---- Capture wiring ----
+el("cameraBtn").addEventListener("click", () => el("cameraInput").click());
+el("uploadBtn").addEventListener("click", () => el("uploadInput").click());
+el("cameraInput").addEventListener("change", (e) => handleFile(e.target.files[0]));
+el("uploadInput").addEventListener("change", (e) => handleFile(e.target.files[0]));
+el("retakeBtn").addEventListener("click", resetCapture);
+
+function resetCapture(){
+  state.file = null; state.base64 = null; state.mediaType = null;
+  state.estimate = null; state.items = []; state.mealType = null;
+  el("captureEmpty").style.display = "flex";
+  el("previewWrap").style.display = "none";
+  el("estimateRow").style.display = "none";
+  el("factsPanel").innerHTML = "";
+  setStatus("");
+  el("cameraInput").value = "";
+  el("uploadInput").value = "";
+  el("descriptionInput").value = "";
+}
+
+// Phone camera photos are several MB, and base64 adds ~33% on top — big enough
+// to stall the upload. Downscale to a long edge of 1024px and re-encode as JPEG,
+// which is plenty of detail for food recognition at a fraction of the size.
+const MAX_EDGE = 1024;
+const JPEG_QUALITY = 0.8;
+
+function downscaleImage(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Couldn't read that image."));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Couldn't decode that image."));
+      img.onload = () => {
+        let { width, height } = img;
+        const scale = Math.min(1, MAX_EDGE / Math.max(width, height));
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL("image/jpeg", JPEG_QUALITY);
+        resolve({ dataUrl, base64: dataUrl.split(",")[1], mediaType: "image/jpeg" });
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleFile(file){
+  if (!file) return;
+  state.file = file;
+  setStatus("Preparing photo…");
+  try {
+    const { dataUrl, base64, mediaType } = await downscaleImage(file);
+    state.base64 = base64;
+    state.mediaType = mediaType;
+    el("previewImg").src = dataUrl;
+    el("captureEmpty").style.display = "none";
+    el("previewWrap").style.display = "block";
+    el("estimateRow").style.display = "block";
+    el("factsPanel").innerHTML = "";
+    setStatus("");
+    console.log(`Photo prepared: ~${Math.round(base64.length / 1024)} KB encoded`);
+  } catch (err) {
+    console.error(err);
+    setStatus(err.message || "Couldn't process that photo.", true);
+  }
+}
+
+// supabase.functions.invoke has no timeout — if a request stalls, the promise
+// never settles and the UI hangs with no error. Cap it so failures are visible.
+const INVOKE_TIMEOUT_MS = 45000;
+
+// Transient upstream hiccups (Gemini overloaded, Supabase momentarily out of
+// compute, rate limits) usually clear themselves within a few seconds. Retry
+// those automatically instead of making every blip a hard failure.
+const RETRYABLE_STATUSES = [429, 502, 503, 546];
+const RETRY_DELAYS_MS = [1000, 3000];
+
+function isRetryable(err){
+  const msg = String(err && err.message || err);
+  return RETRYABLE_STATUSES.some(s => msg.includes(String(s))) || /WORKER_RESOURCE_LIMIT/i.test(msg);
+}
+
+async function invokeOnce(name, body){
+  const result = await Promise.race([
+    supabaseClient.functions.invoke(name, { body }),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Request timed out after 45s — check your connection and try again.")), INVOKE_TIMEOUT_MS)
+    ),
+  ]);
+  if (result.error) {
+    // supabase-js's default error message is a generic "non-2xx status code" —
+    // the real status/body lives on error.context (the raw Response). Pull it
+    // out so retry logic and error messages can actually distinguish causes.
+    let detail = result.error.message || String(result.error);
+    const ctx = result.error.context;
+    if (ctx && typeof ctx.json === "function") {
+      try {
+        const parsed = await (ctx.clone ? ctx.clone() : ctx).json();
+        detail = `${ctx.status || ""} ${parsed.error || parsed.message || detail}`.trim();
+      } catch (e) { /* body wasn't JSON or already consumed — fall back to default message */ }
+    }
+    throw new Error(detail);
+  }
+  if (result.data && result.data.error) throw new Error(result.data.error);
+  return result.data;
+}
+
+async function invokeFn(name, body, attempt = 0){
+  try {
+    return await invokeOnce(name, body);
+  } catch (err) {
+    if (attempt < RETRY_DELAYS_MS.length && isRetryable(err)) {
+      setStatus(`Temporary hiccup — retrying… (${attempt + 1}/${RETRY_DELAYS_MS.length})`);
+      await new Promise(r => setTimeout(r, RETRY_DELAYS_MS[attempt]));
+      return invokeFn(name, body, attempt + 1);
+    }
+    throw err;
+  }
+}
+
+// ---- Estimate via Gemini vision (proxied through the Supabase Edge Function) ----
+el("estimateBtn").addEventListener("click", estimateMacros);
+
+async function estimateMacros(){
+  if (!state.base64) return;
+  el("estimateBtn").disabled = true;
+  setStatus("Analyzing plate…");
+
+  try {
+    if (!supabaseClient) throw new Error("Supabase isn't configured.");
+    const data = await invokeFn("estimate-macros", {
+      image_base64: state.base64, media_type: state.mediaType
+    });
+    const parsed = data.estimate;
+    state.estimate = parsed;
+    renderFacts(parsed);
+    setStatus("Estimate ready — edit items, add anything it missed, then save.");
+  } catch (err) {
+    console.error(err);
+    const msg = String(err && err.message || err);
+    if (msg.includes("429") || /rate|quota/i.test(msg)) {
+      setStatus("Gemini rate limit hit — wait a minute and try again.", true);
+    } else {
+      setStatus("Couldn't estimate that one — add items manually below.", true);
+    }
+    renderFacts({
+      food_name: "New Plate",
+      confidence_note: "Manual entry — estimate failed.",
+      items: [{ name: "", quantity: "1 serving", calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }]
+    });
+  } finally {
+    el("estimateBtn").disabled = false;
+  }
+}
+
+// ---- Estimate from a typed description (no photo) ----
+el("describeBtn").addEventListener("click", estimateFromDescription);
+
+async function estimateFromDescription(){
+  const description = el("descriptionInput").value.trim();
+  if (!description) { setStatus("Describe what you ate first.", true); return; }
+  el("describeBtn").disabled = true;
+  setStatus("Analyzing description…");
+
+  try {
+    if (!supabaseClient) throw new Error("Supabase isn't configured.");
+    const data = await invokeFn("estimate-macros", { description });
+    // This estimate isn't tied to a photo — clear any in-progress capture state.
+    state.file = null; state.base64 = null; state.mediaType = null;
+    el("captureEmpty").style.display = "flex";
+    el("previewWrap").style.display = "none";
+    el("estimateRow").style.display = "none";
+    const parsed = data.estimate;
+    state.estimate = parsed;
+    renderFacts(parsed);
+    el("descriptionInput").value = "";
+    setStatus("Estimate ready — edit items, add anything it missed, then save.");
+  } catch (err) {
+    console.error(err);
+    setStatus("Couldn't estimate that — add items manually below.", true);
+    renderFacts({
+      food_name: "New Plate",
+      confidence_note: "Manual entry — estimate failed.",
+      items: [{ name: "", quantity: "1 serving", calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }]
+    });
+  } finally {
+    el("describeBtn").disabled = false;
+  }
+}
+
+// ---- Nutrition Facts panel ----
+function renderFacts(est){
+  const rawItems = (est.items && est.items.length) ? est.items
+    : [{ name: "", quantity: "1 serving", calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }];
+  state.items = rawItems.map(it => ({
+    id: newItemId(),
+    name: it.name || "",
+    quantity: it.quantity || "",
+    calories: num(it.calories),
+    protein_g: num(it.protein_g),
+    carbs_g: num(it.carbs_g),
+    fat_g: num(it.fat_g),
+  }));
+  state.mealType = guessMealType();
+
+  el("factsPanel").innerHTML = `
+    <div class="facts">
+      <input class="food-name" id="fFoodName" value="${escapeAttr(est.food_name || "Plate")}" />
+      <div class="meal-select" id="mealSelect">
+        ${MEAL_TYPES.map(m => `<button type="button" class="meal-pill${m === state.mealType ? " active" : ""}" data-meal="${m}">${m}</button>`).join("")}
+      </div>
+      <div class="rule-thick"></div>
+      <div class="cal-row">
+        <span class="label">Calories</span>
+        <span class="value" id="totalCal">0</span>
+      </div>
+      <div class="rule-med"></div>
+      <div class="macro-row">
+        <span class="macro-label"><span class="dot protein"></span>Protein</span>
+        <span><span class="total-num" id="totalProtein">0</span><span class="unit">g</span></span>
+      </div>
+      <div class="macro-row">
+        <span class="macro-label"><span class="dot carb"></span>Net Carbs</span>
+        <span><span class="total-num" id="totalCarb">0</span><span class="unit">g</span></span>
+      </div>
+      <div class="macro-row">
+        <span class="macro-label"><span class="dot fat"></span>Fat</span>
+        <span><span class="total-num" id="totalFat">0</span><span class="unit">g</span></span>
+      </div>
+      <div class="rule-thin"></div>
+      <div class="notes">${escapeHtml(est.confidence_note || "")}</div>
+      <div class="rule-thin"></div>
+      <div class="items-section">
+        <div class="items-header"><span>Ingredients</span><span>tap any field to edit</span></div>
+        <div id="itemsList"></div>
+        <button type="button" class="add-item-btn" id="addItemBtn">+ Add item</button>
+      </div>
+      <div class="save-row">
+        <button class="btn-primary btn-full" id="saveBtn">Save to Log</button>
+      </div>
+    </div>
+  `;
+
+  renderItemsList();
+  el("itemsList").addEventListener("input", onItemInput);
+  el("itemsList").addEventListener("click", onItemClick);
+  el("addItemBtn").addEventListener("click", onAddItem);
+  el("mealSelect").addEventListener("click", onMealSelect);
+  el("saveBtn").addEventListener("click", saveEntry);
+}
+
+function itemRowHtml(item){
+  return `
+    <div class="item-row" data-id="${item.id}">
+      <div class="item-top">
+        <input class="item-name" data-field="name" value="${escapeAttr(item.name)}" placeholder="Item name" />
+        <input class="item-qty" data-field="quantity" value="${escapeAttr(item.quantity)}" placeholder="qty" />
+        <button type="button" class="item-lookup" data-action="lookup" title="Look up macros for this item">⌕ Est.</button>
+        <button type="button" class="item-remove" data-action="remove" aria-label="Remove item">✕</button>
+      </div>
+      <div class="item-macros">
+        <div class="item-macro-field cal"><label>Kcal</label><input type="number" inputmode="numeric" data-field="calories" value="${num(item.calories)}" /></div>
+        <div class="item-macro-field protein"><label>Protein g</label><input type="number" inputmode="decimal" data-field="protein_g" value="${num(item.protein_g)}" /></div>
+        <div class="item-macro-field carb"><label>Net Carb g</label><input type="number" inputmode="decimal" data-field="carbs_g" value="${num(item.carbs_g)}" /></div>
+        <div class="item-macro-field fat"><label>Fat g</label><input type="number" inputmode="decimal" data-field="fat_g" value="${num(item.fat_g)}" /></div>
+      </div>
+    </div>
+  `;
+}
+
+function renderItemsList(){
+  el("itemsList").innerHTML = state.items.map(itemRowHtml).join("");
+  recomputeTotals();
+}
+
+function onItemInput(e){
+  const field = e.target.dataset.field;
+  if (!field) return;
+  const row = e.target.closest(".item-row");
+  const item = state.items.find(i => i.id === row.dataset.id);
+  if (!item) return;
+  if (field === "name" || field === "quantity") {
+    item[field] = e.target.value;
+  } else {
+    item[field] = Number(e.target.value) || 0;
+  }
+  recomputeTotals();
+}
+
+function onItemClick(e){
+  const action = e.target.dataset.action;
+  if (!action) return;
+  const row = e.target.closest(".item-row");
+  if (action === "remove") {
+    state.items = state.items.filter(i => i.id !== row.dataset.id);
+    renderItemsList();
+  } else if (action === "lookup") {
+    const item = state.items.find(i => i.id === row.dataset.id);
+    if (item) lookupItemMacros(item, e.target);
+  }
+}
+
+async function lookupItemMacros(item, btn){
+  const name = (item.name || "").trim();
+  if (!name) { setStatus("Add an item name before looking it up.", true); return; }
+  if (!supabaseClient) { setStatus("Supabase isn't configured.", true); return; }
+
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "…";
+  setStatus(`Looking up ${name}…`);
+  try {
+    const data = await invokeFn("lookup-item", { name, quantity: item.quantity || "1 serving" });
+    const est = data.estimate;
+    item.calories = num(est.calories);
+    item.protein_g = num(est.protein_g);
+    item.carbs_g = num(est.carbs_g);
+    item.fat_g = num(est.fat_g);
+    renderItemsList();
+    setStatus(`Updated macros for ${name}.`);
+  } catch (err) {
+    console.error(err);
+    setStatus(`Couldn't look up ${name} — enter macros manually.`, true);
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
+}
+
+function onAddItem(){
+  state.items.push({ id: newItemId(), name: "", quantity: "1 serving", calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
+  renderItemsList();
+  const rows = el("itemsList").querySelectorAll(".item-row");
+  const last = rows[rows.length - 1];
+  if (last) last.querySelector(".item-name").focus();
+}
+
+function onMealSelect(e){
+  if (!e.target.classList.contains("meal-pill")) return;
+  state.mealType = e.target.dataset.meal;
+  el("mealSelect").querySelectorAll(".meal-pill").forEach(p => {
+    p.classList.toggle("active", p.dataset.meal === state.mealType);
+  });
+}
+
+function round1(n){ return Math.round(n * 10) / 10; }
+
+function recomputeTotals(){
+  const totals = state.items.reduce((acc, i) => {
+    acc.calories += num(i.calories);
+    acc.protein_g += num(i.protein_g);
+    acc.carbs_g += num(i.carbs_g);
+    acc.fat_g += num(i.fat_g);
+    return acc;
+  }, { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
+  state.totals = totals;
+  el("totalCal").textContent = Math.round(totals.calories);
+  el("totalProtein").textContent = round1(totals.protein_g);
+  el("totalCarb").textContent = round1(totals.carbs_g);
+  el("totalFat").textContent = round1(totals.fat_g);
+}
+
+function num(n){ return (typeof n === "number" && !isNaN(n)) ? n : (Number(n) || 0); }
+function escapeAttr(s){ return String(s ?? "").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
+function escapeHtml(s){ return String(s).replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+
+// ---- Save to Supabase ----
+async function saveEntry(){
+  if (!supabaseClient) { setStatus("Add your Supabase URL/key in the file to enable saving.", true); return; }
+  const entry = {
+    food_name: el("fFoodName").value.trim() || "Plate",
+    meal_type: state.mealType || null,
+    user_name: state.currentUser,
+    calories: Math.round(state.totals.calories),
+    protein_g: round1(state.totals.protein_g),
+    carbs_g: round1(state.totals.carbs_g),
+    fat_g: round1(state.totals.fat_g),
+    items: state.items.map(({ id, ...rest }) => rest),
+    notes: state.estimate ? (state.estimate.confidence_note || null) : null,
+  };
+  el("saveBtn").disabled = true;
+  setStatus("Saving…");
+  const { error } = await supabaseClient.from("plate_logs").insert([entry]);
+  if (error) {
+    console.error(error);
+    setStatus("Save failed: " + error.message, true);
+    el("saveBtn").disabled = false;
+    return;
+  }
+  setStatus("Saved.");
+  resetCapture();
+  loadHistory();
+}
+
+// ---- History ----
+async function loadHistory(){
+  if (!supabaseClient) return;
+  const { data, error } = await supabaseClient
+    .from("plate_logs")
+    .select("*")
+    .eq("user_name", state.currentUser)
+    .order("created_at", { ascending: false })
+    .limit(15);
+  if (error) { console.error(error); return; }
+  const list = el("historyList");
+  if (!data || data.length === 0) {
+    list.innerHTML = '<div class="empty-hist">No entries yet.</div>';
+    return;
+  }
+  list.innerHTML = data.map(row => {
+    const when = new Date(row.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    const meal = row.meal_type ? ` · ${escapeHtml(row.meal_type)}` : "";
+    return `
+      <div class="log-item" data-id="${row.id}">
+        <div style="flex:1;min-width:0;">
+          <div class="name">${escapeHtml(row.food_name)}</div>
+          <div class="meta">${when}${meal}</div>
+        </div>
+        <div class="macros">${Math.round(row.calories)} kcal<br/>P${Math.round(row.protein_g)} C${Math.round(row.carbs_g)} F${Math.round(row.fat_g)}</div>
+        <button type="button" class="item-lookup reuse-btn" data-action="reuse-log" title="Load this meal into today's plate to adjust and save">↺ Reuse</button>
+        <button type="button" class="log-item-delete" data-action="delete-log" aria-label="Delete entry">✕</button>
+      </div>
+    `;
+  }).join("");
+}
+
+el("historyList").addEventListener("click", (e) => {
+  if (e.target.dataset.action === "reuse-log") { reuseMeal(e.target.closest(".log-item").dataset.id, e.target); return; }
+  if (e.target.dataset.action !== "delete-log") return;
+  const row = e.target.closest(".log-item");
+  deleteLogEntry(row.dataset.id, e.target, () => loadHistory());
+});
+
+// ---- Reuse a past meal: load it into the plate editor as a new entry ----
+// Nothing is written until "Save to Log", which inserts a NEW row stamped
+// now — the original entry is never modified.
+async function reuseMeal(id, btn){
+  if (!supabaseClient) return;
+  const editing = el("factsPanel").innerHTML.trim() !== "";
+  if (editing && !confirm("Replace the plate you're currently editing?")) return;
+  btn.disabled = true;
+  const { data: row, error } = await supabaseClient.from("plate_logs").select("*").eq("id", id).maybeSingle();
+  btn.disabled = false;
+  if (error || !row) { console.error(error); setStatus("Couldn't load that meal.", true); return; }
+
+  let items = row.items;
+  if (typeof items === "string") { try { items = JSON.parse(items); } catch (e) { items = null; } }
+  if (!Array.isArray(items) || !items.length) {
+    // Older/manual entries may have totals only — carry them as one line item.
+    items = [{ name: row.food_name, quantity: "1 serving", calories: row.calories, protein_g: row.protein_g, carbs_g: row.carbs_g, fat_g: row.fat_g }];
+  }
+  const when = new Date(row.created_at).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+
+  if (state.activeTab !== "log") showTab("log");
+  resetCapture();
+  renderFacts({
+    food_name: row.food_name,
+    confidence_note: `Reused from ${when}${row.meal_type ? " " + row.meal_type.toLowerCase() : ""} — adjust anything that changed, then save.`,
+    items,
+  });
+  // Saved notes keep the original estimate note, not the "Reused from" banner.
+  state.estimate = { food_name: row.food_name, confidence_note: row.notes || null };
+  if (row.meal_type && MEAL_TYPES.includes(row.meal_type)) {
+    state.mealType = row.meal_type;
+    el("mealSelect").querySelectorAll(".meal-pill").forEach(p => p.classList.toggle("active", p.dataset.meal === state.mealType));
+  }
+  setStatus(`Loaded "${row.food_name}" — edit and Save to Log to add it to today.`);
+  el("factsPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function deleteLogEntry(id, btn, onDone){
+  if (!supabaseClient) return;
+  if (!confirm("Delete this entry?")) return;
+  btn.disabled = true;
+  const { error } = await supabaseClient.from("plate_logs").delete().eq("id", id);
+  if (error) {
+    console.error(error);
+    setStatus("Delete failed: " + error.message, true);
+    btn.disabled = false;
+    return;
+  }
+  setStatus("Entry deleted.");
+  onDone();
+}
+
+// (Initial loads happen in bootApp(), after sign-in.)
+
+// ================== Stats Dashboard ==================
+
+let dayChart = null;
+const dayPicker = el("dayPicker");
+let lastWeekRows = [];
+
+// Local-date string ("YYYY-MM-DD") for a Date, defaulting to right now —
+// uses the device's own clock/timezone, not Supabase's stored UTC value.
+function localDateStr(d = new Date()){
+  const tzOffsetMs = d.getTimezoneOffset() * 60000;
+  return new Date(d - tzOffsetMs).toISOString().slice(0, 10);
+}
+dayPicker.value = localDateStr();
+dayPicker.addEventListener("change", () => { loadDayLookup(); renderWeekList(lastWeekRows); });
+
+// Local-time day boundaries as ISO strings, for a "YYYY-MM-DD" string or a Date.
+function dayBoundsIso(dateInput){
+  const d = (typeof dateInput === "string") ? new Date(dateInput + "T00:00:00") : new Date(dateInput);
+  d.setHours(0, 0, 0, 0);
+  const start = new Date(d);
+  const end = new Date(d);
+  end.setDate(end.getDate() + 1);
+  return { startIso: start.toISOString(), endIso: end.toISOString() };
+}
+
+function sumRows(rows){
+  return rows.reduce((acc, r) => {
+    acc.calories += Number(r.calories) || 0;
+    acc.protein_g += Number(r.protein_g) || 0;
+    acc.carbs_g += Number(r.carbs_g) || 0;
+    acc.fat_g += Number(r.fat_g) || 0;
+    return acc;
+  }, { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
+}
+
+async function fetchRowsInRange(startIso, endIso){
+  const { data, error } = await supabaseClient
+    .from("plate_logs")
+    .select("id, food_name, meal_type, calories, protein_g, carbs_g, fat_g, created_at")
+    .eq("user_name", state.currentUser)
+    .gte("created_at", startIso)
+    .lt("created_at", endIso)
+    .order("created_at", { ascending: true });
+  if (error) { console.error(error); return []; }
+  return data || [];
+}
+
+// ---- Training / Rest day (per user, per local date) ----
+function renderDayTypeRow(){
+  el("dayTypeRow").querySelectorAll(".meal-pill").forEach(btn => {
+    const isTraining = btn.dataset.daytype === "training";
+    btn.classList.toggle("active", isTraining === state.isTrainingToday);
+  });
+}
+
+el("dayTypeRow").addEventListener("click", (e) => {
+  const btn = e.target.closest(".meal-pill");
+  if (!btn) return;
+  setDayType(btn.dataset.daytype === "training");
+});
+
+async function loadDayType(){
+  renderDayTypeRow();
+  if (!supabaseClient) return;
+  const { data, error } = await supabaseClient
+    .from("day_type")
+    .select("is_training")
+    .eq("user_name", state.currentUser)
+    .eq("log_date", localDateStr())
+    .maybeSingle();
+  if (error) console.error(error);
+  state.isTrainingToday = data ? !!data.is_training : false;
+  renderDayTypeRow();
+}
+
+async function setDayType(isTraining){
+  state.isTrainingToday = isTraining;
+  renderDayTypeRow();
+  if (state.activeTab === "stats") renderProgressBars();
+  if (!supabaseClient) return;
+  const { error } = await supabaseClient
+    .from("day_type")
+    .upsert(
+      { user_name: state.currentUser, log_date: localDateStr(), is_training: isTraining },
+      { onConflict: "user_name,log_date" }
+    );
+  if (error) { console.error(error); setStatus("Couldn't save day type: " + error.message, true); }
+}
+
+// ---- Goals ----
+state.goals = {
+  rest: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+  training: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+};
+
+async function loadGoals(){
+  if (!supabaseClient) return;
+  const { data, error } = await supabaseClient
+    .from("user_goals")
+    .select("*")
+    .eq("user_name", state.currentUser);
+  if (error) { console.error(error); return; }
+  const restRow = (data || []).find(g => !g.is_training);
+  const trainRow = (data || []).find(g => g.is_training);
+  state.goals.rest = restRow || { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+  state.goals.training = trainRow || { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+  el("goalRestCal").value = state.goals.rest.calories || "";
+  el("goalRestProtein").value = state.goals.rest.protein_g || "";
+  el("goalRestCarb").value = state.goals.rest.carbs_g || "";
+  el("goalRestFat").value = state.goals.rest.fat_g || "";
+  el("goalTrainCal").value = state.goals.training.calories || "";
+  el("goalTrainProtein").value = state.goals.training.protein_g || "";
+  el("goalTrainCarb").value = state.goals.training.carbs_g || "";
+  el("goalTrainFat").value = state.goals.training.fat_g || "";
+}
+
+el("saveGoalsBtn").addEventListener("click", saveGoals);
+
+async function saveGoals(){
+  if (!supabaseClient) { setStatus("Supabase isn't configured.", true); return; }
+  const rest = {
+    user_name: state.currentUser, is_training: false,
+    calories: Number(el("goalRestCal").value) || 0,
+    protein_g: Number(el("goalRestProtein").value) || 0,
+    carbs_g: Number(el("goalRestCarb").value) || 0,
+    fat_g: Number(el("goalRestFat").value) || 0,
+  };
+  const training = {
+    user_name: state.currentUser, is_training: true,
+    calories: Number(el("goalTrainCal").value) || 0,
+    protein_g: Number(el("goalTrainProtein").value) || 0,
+    carbs_g: Number(el("goalTrainCarb").value) || 0,
+    fat_g: Number(el("goalTrainFat").value) || 0,
+  };
+  el("saveGoalsBtn").disabled = true;
+  const { error } = await supabaseClient.from("user_goals").upsert([rest, training], { onConflict: "user_name,is_training" });
+  el("saveGoalsBtn").disabled = false;
+  if (error) { console.error(error); setStatus("Couldn't save goals: " + error.message, true); return; }
+  state.goals.rest = rest;
+  state.goals.training = training;
+  setStatus("Goals saved.");
+  renderProgressBars();
+}
+
+function renderProgressBars(){
+  el("dayTypeTag").textContent = state.isTrainingToday ? "Training Day" : "Rest Day";
+  const goalSet = state.isTrainingToday ? state.goals.training : state.goals.rest;
+  const t = state.todayTotals || { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+  const rows = [
+    { label: "Calories", consumed: t.calories, goal: goalSet.calories, unit: " kcal", color: "var(--cal)" },
+    { label: "Protein", consumed: t.protein_g, goal: goalSet.protein_g, unit: "g", color: "var(--protein)" },
+    { label: "Net Carbs", consumed: t.carbs_g, goal: goalSet.carbs_g, unit: "g", color: "var(--carb)" },
+    { label: "Fat", consumed: t.fat_g, goal: goalSet.fat_g, unit: "g", color: "var(--fat)" },
+  ];
+  el("progressBars").innerHTML = rows.map(r => {
+    if (!r.goal || r.goal <= 0) {
+      return `
+        <div class="progress-row">
+          <div class="progress-row-top"><span class="p-label">${r.label}</span><span class="p-nums">${round1(r.consumed)}${r.unit}</span></div>
+          <div class="progress-nogoal">No goal set for this day type — set one in Edit Goals below.</div>
+        </div>`;
+    }
+    const pct = Math.max(0, Math.min(100, Math.round((r.consumed / r.goal) * 100)));
+    return `
+      <div class="progress-row">
+        <div class="progress-row-top"><span class="p-label">${r.label}</span><span class="p-nums">${round1(r.consumed)} / ${round1(r.goal)}${r.unit}</span></div>
+        <div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:${r.color};"></div></div>
+      </div>`;
+  }).join("");
+}
+
+// ---- Last 7 days list ----
+function renderWeekList(weekRows){
+  const byDate = {};
+  weekRows.forEach(r => {
+    const ds = localDateStr(new Date(r.created_at));
+    if (!byDate[ds]) byDate[ds] = { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+    byDate[ds].calories += Number(r.calories) || 0;
+    byDate[ds].protein_g += Number(r.protein_g) || 0;
+    byDate[ds].carbs_g += Number(r.carbs_g) || 0;
+    byDate[ds].fat_g += Number(r.fat_g) || 0;
+  });
+  const todayStr = localDateStr();
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - i);
+    days.push(localDateStr(d));
+  }
+  el("weekList").innerHTML = days.map(ds => {
+    const totals = byDate[ds] || { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+    const label = ds === todayStr
+      ? "Today"
+      : new Date(ds + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    const active = ds === dayPicker.value ? " active" : "";
+    return `
+      <button type="button" class="week-day-row${active}" data-date="${ds}">
+        <span class="wd-date">${label}</span>
+        <span class="wd-macros">${Math.round(totals.calories)} kcal · P${Math.round(totals.protein_g)} C${Math.round(totals.carbs_g)} F${Math.round(totals.fat_g)}</span>
+      </button>
+    `;
+  }).join("");
+}
+
+el("weekList").addEventListener("click", (e) => {
+  const btn = e.target.closest(".week-day-row");
+  if (!btn) return;
+  dayPicker.value = btn.dataset.date;
+  loadDayLookup();
+  el("weekList").querySelectorAll(".week-day-row").forEach(b => b.classList.toggle("active", b.dataset.date === btn.dataset.date));
+});
+
+async function refreshStats(){
+  if (!supabaseClient) return;
+  const today = dayBoundsIso(new Date());
+  const weekStart = new Date(); weekStart.setHours(0,0,0,0); weekStart.setDate(weekStart.getDate() - 6);
+  const week = { startIso: weekStart.toISOString(), endIso: today.endIso };
+
+  const [todayRows, weekRows] = await Promise.all([
+    fetchRowsInRange(today.startIso, today.endIso),
+    fetchRowsInRange(week.startIso, week.endIso),
+  ]);
+  lastWeekRows = weekRows;
+
+  const t = sumRows(todayRows);
+  state.todayTotals = t;
+  el("todayCal").textContent = Math.round(t.calories);
+  el("todayMacros").textContent = `P${round1(t.protein_g)} · C${round1(t.carbs_g)} · F${round1(t.fat_g)}`;
+
+  const w = sumRows(weekRows);
+  el("weekCal").textContent = Math.round(w.calories);
+  el("weekMacros").textContent = `P${round1(w.protein_g)} · C${round1(w.carbs_g)} · F${round1(w.fat_g)}`;
+
+  renderWeekList(weekRows);
+  await loadGoals();
+  renderProgressBars();
+  loadDayLookup();
+}
+
+async function loadDayLookup(){
+  if (!supabaseClient) return;
+  const { startIso, endIso } = dayBoundsIso(dayPicker.value);
+  const rows = await fetchRowsInRange(startIso, endIso);
+  const totals = sumRows(rows);
+
+  el("dtCal").textContent = Math.round(totals.calories);
+  el("dtProtein").textContent = round1(totals.protein_g);
+  el("dtCarb").textContent = round1(totals.carbs_g);
+  el("dtFat").textContent = round1(totals.fat_g);
+
+  // Calories by meal type
+  const byMeal = {};
+  MEAL_TYPES.forEach(m => byMeal[m] = 0);
+  let other = 0;
+  rows.forEach(r => {
+    if (r.meal_type && byMeal.hasOwnProperty(r.meal_type)) byMeal[r.meal_type] += Number(r.calories) || 0;
+    else other += Number(r.calories) || 0;
+  });
+  const labels = [...MEAL_TYPES];
+  const values = MEAL_TYPES.map(m => Math.round(byMeal[m]));
+  if (other > 0) { labels.push("Other"); values.push(Math.round(other)); }
+
+  const ctx = el("dayChart").getContext("2d");
+  if (dayChart) dayChart.destroy();
+  dayChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: "#c1401c",
+        borderRadius: 2,
+        maxBarThickness: 40,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, ticks: { font: { family: "'IBM Plex Mono'", size: 10 } }, title: { display: true, text: "kcal", font: { family: "'IBM Plex Mono'", size: 10 } } },
+        x: { ticks: { font: { family: "'IBM Plex Mono'", size: 10 } } }
+      }
+    }
+  });
+
+  const entriesEl = el("dayEntries");
+  if (!rows.length) {
+    entriesEl.innerHTML = '<div class="stats-empty">Nothing logged this day.</div>';
+    return;
+  }
+  entriesEl.innerHTML = rows.map(r => `
+    <div class="log-item" data-id="${r.id}">
+      <div style="flex:1;min-width:0;">
+        <div class="name">${escapeHtml(r.food_name)}</div>
+        <div class="meta">${escapeHtml(r.meal_type || "")}</div>
+      </div>
+      <div class="macros">${Math.round(r.calories)} kcal<br/>P${Math.round(r.protein_g)} C${Math.round(r.carbs_g)} F${Math.round(r.fat_g)}</div>
+      <button type="button" class="item-lookup reuse-btn" data-action="reuse-log" title="Load this meal into today's plate to adjust and save">↺ Reuse</button>
+      <button type="button" class="log-item-delete" data-action="delete-log" aria-label="Delete entry">✕</button>
+    </div>
+  `).join("");
+}
+
+el("dayEntries").addEventListener("click", (e) => {
+  if (e.target.dataset.action === "reuse-log") { reuseMeal(e.target.closest(".log-item").dataset.id, e.target); return; }
+  if (e.target.dataset.action !== "delete-log") return;
+  const row = e.target.closest(".log-item");
+  deleteLogEntry(row.dataset.id, e.target, () => refreshStats());
+});
+
+// =====================================================================
+// TRAINING — lifting + walking (merged from Workout Tracker)
+// =====================================================================
+
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+const PROGRAM = {
+  push: {
+    label: "Push", subtitle: "Chest · Shoulders · Triceps",
+    days: ["Monday", "Friday"], color: "#c1401c",
+    exercises: [
+      "Dumbbell Bench Press", "Dumbbell Shoulder Press", "Lateral Raises", "Dumbbell Flyes",
+      "Overhead Tricep Extension", "Tricep Kickbacks",
+      // Friday variations
+      "Incline Dumbbell Press", "Arnold Press", "Push-ups", "Skull Crushers",
+    ],
+  },
+  pull: {
+    label: "Pull", subtitle: "Back · Biceps · Rear Delts",
+    days: ["Tuesday", "Saturday"], color: "#2f6b3a",
+    exercises: [
+      "Dumbbell Rows", "Dumbbell Pullover", "Rear Delt Flyes", "Dumbbell Curl", "Hammer Curl",
+      // Saturday variations
+      "Incline Dumbbell Row", "Dumbbell Shrugs", "Face Pulls", "Concentration Curl", "Reverse Curl",
+    ],
+  },
+  legs: {
+    label: "Legs + Core", subtitle: "Quads · Hamstrings · Calves · Abs",
+    days: ["Thursday"], color: "#3b5b92",
+    exercises: [
+      "Goblet Squat", "Romanian Deadlift", "Reverse Lunges", "Calf Raises",
+      "Plank", "Crunches", "Leg Raises", "Bicycle Crunches", "Russian Twists",
+    ],
+  },
+};
+const REST_DAYS = ["Wednesday", "Sunday"];
+const WALK_COLOR = "#b8860b";
+
+// Starting weights used only when there's no history for an exercise yet.
+const DEFAULT_WEIGHTS = {
+  Nick: {
+    "Dumbbell Bench Press": 80, "Dumbbell Shoulder Press": 25, "Dumbbell Curl": 20,
+    "Hammer Curl": 20, "Goblet Squat": 40, "Romanian Deadlift": 40, "Reverse Lunges": 20,
+  },
+};
+
+const EFFORT_LEVELS = [
+  { value: "medium", label: "Medium", icon: "●○○" },
+  { value: "medium_high", label: "Medium-High", icon: "●●○" },
+  { value: "high", label: "High", icon: "●●●" },
+];
+
+const train = {
+  sessions: [],       // recent sessions for the current user (with set counts)
+  walks: [],          // recent walks for the current user
+  current: null,      // the session open in the editor
+  sets: [],           // sets for train.current
+  pickType: null,     // which day type the Start button will use
+  lastTime: {},       // exercise name -> {weight, reps, date} from a previous session
+  editingWalkId: null,
+};
+
+function scheduledDayType(d = new Date()){
+  const name = WEEKDAYS[d.getDay()];
+  if (REST_DAYS.includes(name)) return "rest";
+  return Object.keys(PROGRAM).find(k => PROGRAM[k].days.includes(name)) || "push";
+}
+function programFor(type){ return PROGRAM[type] || PROGRAM.push; }
+function daysAgoStr(n){ const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() - n); return localDateStr(d); }
+function fmtDay(ds, withYear = false){
+  const opts = { weekday: "short", month: "short", day: "numeric" };
+  if (withYear) opts.year = "numeric";
+  return new Date(ds + "T12:00:00").toLocaleDateString(undefined, opts);
+}
+function fmtDuration(min, sec){
+  if (!min && !sec) return "";
+  return `${min || 0}m${sec ? ` ${sec}s` : ""}`;
+}
+function fmtPace(miles, minutes){
+  if (!miles || !minutes) return "";
+  const p = minutes / miles;
+  const m = Math.floor(p), s = Math.round((p - m) * 60);
+  return `${m}:${String(s === 60 ? 0 : s).padStart(2, "0")}/mi`;
+}
+function groupBy(arr, key){
+  return arr.reduce((acc, item) => { (acc[item[key]] = acc[item[key]] || []).push(item); return acc; }, {});
+}
+
+// ---- Debounced saves that can be flushed (so "Finish" never drops a keystroke) ----
+const pendingSaves = {};
+async function runSave(fn){
+  try {
+    const res = await fn();
+    if (res && res.error) throw res.error;
+  } catch (err) {
+    console.error(err);
+    setStatus("Couldn't save: " + (err.message || err), true);
+  }
+}
+function debounceSave(key, fn, delay = 800){
+  if (pendingSaves[key]) clearTimeout(pendingSaves[key].t);
+  pendingSaves[key] = { fn, t: setTimeout(() => { delete pendingSaves[key]; runSave(fn); }, delay) };
+}
+async function flushSaves(){
+  const fns = Object.keys(pendingSaves).map(k => { clearTimeout(pendingSaves[k].t); const f = pendingSaves[k].fn; delete pendingSaves[k]; return f; });
+  await Promise.all(fns.map(runSave));
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushSaves(); });
+
+// ---- Data loading ----
+async function loadSessions(){
+  if (!supabaseClient) return;
+  const user = state.currentUser;
+  const { data, error } = await supabaseClient
+    .from("workout_sessions")
+    .select("*, exercise_sets(count)")
+    .eq("user_name", user)
+    .order("session_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(30);
+  if (user !== state.currentUser) return; // user switched mid-request
+  if (error) { console.error(error); setStatus("Couldn't load workouts: " + error.message, true); return; }
+  train.sessions = data || [];
+  renderSessionList();
+  if (!train.current) renderLiftMain();
+}
+
+async function loadWalks(){
+  if (!supabaseClient) return;
+  const user = state.currentUser;
+  const { data, error } = await supabaseClient
+    .from("walks")
+    .select("*")
+    .eq("user_name", user)
+    .order("walk_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(60);
+  if (user !== state.currentUser) return;
+  if (error) { console.error(error); setStatus("Couldn't load walks: " + error.message, true); return; }
+  train.walks = data || [];
+  renderWalkList();
+  if (!train.current) renderLiftMain();
+}
+
+// Re-open today's unfinished session after a reload, so an in-progress
+// workout isn't stranded.
+async function resumeOpenSession(){
+  if (train.current) return;
+  const open = train.sessions.find(s => s.session_date === localDateStr() && !s.finished_at);
+  if (open) await openSession(open.id, { quiet: true });
+}
+
+async function openSession(id, { quiet = false } = {}){
+  if (!supabaseClient) return;
+  await flushSaves();
+  const [sRes, setsRes] = await Promise.all([
+    supabaseClient.from("workout_sessions").select("*").eq("id", id).maybeSingle(),
+    supabaseClient.from("exercise_sets").select("*").eq("session_id", id).order("created_at", { ascending: true }),
+  ]);
+  if (sRes.error || setsRes.error || !sRes.data) {
+    console.error(sRes.error || setsRes.error);
+    setStatus("Couldn't open that workout.", true);
+    return;
+  }
+  train.current = sRes.data;
+  train.sets = setsRes.data || [];
+  train.lastTime = {};
+  renderLiftMain();
+  [...new Set(train.sets.map(s => s.exercise_name))].forEach(n => fetchLastTime(n).then(renderExGroups));
+  if (!quiet) window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+// Most recent previous session's top set for an exercise (progressive-overload hint).
+async function fetchLastTime(name){
+  if (!supabaseClient || !train.current) return null;
+  if (train.lastTime[name] !== undefined) return train.lastTime[name];
+  const { data, error } = await supabaseClient
+    .from("exercise_sets")
+    .select("weight_lbs, reps, session_id, created_at, workout_sessions!inner(session_date, user_name)")
+    .eq("exercise_name", name)
+    .eq("workout_sessions.user_name", state.currentUser)
+    .neq("session_id", train.current.id)
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (error) { console.error(error); return null; }
+  if (!data || !data.length) { train.lastTime[name] = null; return null; }
+  const sid = data[0].session_id;
+  const top = data.filter(s => s.session_id === sid)
+    .reduce((best, s) => (Number(s.weight_lbs) || 0) > (Number(best.weight_lbs) || 0) ? s : best, data[0]);
+  train.lastTime[name] = {
+    weight: top.weight_lbs, reps: top.reps,
+    date: top.workout_sessions ? top.workout_sessions.session_date : null,
+  };
+  return train.lastTime[name];
+}
+
+// ---- Lift tab: hero card or session editor ----
+function renderLiftMain(){
+  const box = el("liftMain");
+  if (!train.current) { box.innerHTML = heroHtml(); return; }
+  box.innerHTML = editorHtml();
+  renderExGroups();
+}
+
+// Which past session to pre-load when starting a workout of `dayType`.
+// Prefer the most recent session on the same weekday (so Friday's push
+// variations follow Friday, Monday's follow Monday); if that weekday has
+// no history, fall back to the most recent session of the same type.
+function sessionSetCount(s){
+  return (train.current && train.current.id === s.id) ? train.sets.length
+    : ((s.exercise_sets && s.exercise_sets[0] && s.exercise_sets[0].count) || 0);
+}
+function findTemplate(dayType){
+  const today = new Date(), todayStr = localDateStr(today);
+  const pool = train.sessions.filter(s => s.day_type === dayType && s.session_date < todayStr && sessionSetCount(s) > 0);
+  const sameWeekday = pool.find(s => new Date(s.session_date + "T12:00:00").getDay() === today.getDay());
+  return sameWeekday || pool[0] || null;
+}
+function templateLabel(t){
+  const days = Math.round((new Date(localDateStr() + "T12:00:00") - new Date(t.session_date + "T12:00:00")) / 86400000);
+  if (days === 7) return "last " + WEEKDAYS[new Date(t.session_date + "T12:00:00").getDay()];
+  return fmtDay(t.session_date);
+}
+
+function heroHtml(){
+  const now = new Date();
+  const sched = scheduledDayType(now);
+  if (!train.pickType) train.pickType = sched === "rest" ? "push" : sched;
+  const pick = train.pickType;
+  const hero = sched === "rest"
+    ? { label: "Rest", subtitle: "Recovery day — log a workout anyway if you trained.", color: "var(--muted)" }
+    : programFor(sched);
+  const todayStr = localDateStr();
+  const walkedToday = train.walks.filter(w => w.walk_date === todayStr);
+  const milesToday = walkedToday.reduce((a, w) => a + (Number(w.miles) || 0), 0);
+  const doneToday = train.sessions.filter(s => s.session_date === todayStr);
+  const template = findTemplate(pick);
+  return `
+    <div class="capture-box">
+      <div class="train-hero" style="--day-color:${hero.color}">
+        <div class="eyebrow">${WEEKDAYS[now.getDay()]} · Scheduled</div>
+        <div class="hero-title">${escapeHtml(hero.label.toUpperCase())}</div>
+        <div class="hero-sub">${escapeHtml(hero.subtitle)}</div>
+        <div class="meal-select" id="liftTypePick">
+          ${Object.entries(PROGRAM).map(([k, p]) =>
+            `<button type="button" class="meal-pill${k === pick ? " active" : ""}" data-action="pick-type" data-type="${k}">${p.label}</button>`
+          ).join("")}
+        </div>
+        ${template ? `
+          <button type="button" class="btn-primary btn-full" data-action="start-workout" data-template="${template.id}">Start from ${escapeHtml(templateLabel(template))}</button>
+          <div class="last-time" style="margin:6px 0 10px;">${programFor(pick).label} · ${fmtDay(template.session_date)} · ${sessionSetCount(template)} sets — loads as a starting point, edit as you go</div>
+          <button type="button" class="btn-secondary btn-full" data-action="start-workout">Start blank</button>
+        ` : `
+          <button type="button" class="btn-primary btn-full" data-action="start-workout">Start ${escapeHtml(programFor(pick).label)} Workout</button>
+        `}
+        ${doneToday.length ? `<div class="last-time" style="margin-top:10px;">✓ ${doneToday.length} workout${doneToday.length > 1 ? "s" : ""} logged today</div>` : ""}
+      </div>
+      <div class="walk-strip${walkedToday.length ? " done" : ""}">
+        <span>${walkedToday.length ? `✓ Walked ${round1(milesToday)} mi today` : "No walk logged today"}</span>
+        <button type="button" class="btn-secondary btn-sm" data-action="go-walk">${walkedToday.length ? "Walks" : "Log Walk"}</button>
+      </div>
+    </div>`;
+}
+
+function editorHtml(){
+  const s = train.current;
+  const p = programFor(s.day_type);
+  const known = new Set(p.exercises);
+  const extras = [...new Set(train.sets.map(x => x.exercise_name))].filter(n => !known.has(n));
+  const options = [...p.exercises, ...extras];
+  return `
+    <div class="facts" style="--day-color:${p.color};margin-top:0;">
+      <div class="facts-title">${escapeHtml(p.label.toUpperCase())} DAY</div>
+      <div class="facts-sub">${fmtDay(s.session_date, true)} · ${escapeHtml(p.subtitle)}</div>
+      <div class="rule-thick"></div>
+      <div class="cal-row">
+        <span class="label">Duration</span>
+        <span class="duration-inputs">
+          <input type="number" inputmode="numeric" id="durMin" data-session-field="duration_minutes" min="0" max="300" placeholder="0" value="${s.duration_minutes ?? ""}" /><span class="unit">min</span>
+          <input type="number" inputmode="numeric" id="durSec" data-session-field="duration_seconds" min="0" max="59" placeholder="0" value="${s.duration_seconds ?? ""}" /><span class="unit">sec</span>
+        </span>
+      </div>
+      <div class="rule-med"></div>
+      <textarea class="session-notes" id="sessionNotes" data-session-field="notes" rows="2" placeholder="How did it feel overall?">${escapeHtml(s.notes || "")}</textarea>
+      <div class="rule-thin"></div>
+      <div class="items-header"><span>Exercises</span><span id="setTotal"></span></div>
+      <div class="add-ex-row">
+        <select class="field-select" id="exSelect">
+          <option value="">— Pick an exercise —</option>
+          ${options.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`).join("")}
+          <option value="__custom">+ Custom exercise</option>
+        </select>
+        <button type="button" class="btn-primary btn-sm" data-action="add-exercise">Add</button>
+      </div>
+      <div class="add-ex-row" id="customExRow" style="display:none;">
+        <input type="text" id="customEx" placeholder="Exercise name" />
+      </div>
+      <div id="exGroups"></div>
+      <div class="save-row">
+        <button type="button" class="btn-primary" style="flex:1;" data-action="finish">${s.finished_at ? "Done" : "Finish Workout"}</button>
+        <button type="button" class="btn-danger-text" data-action="delete-session">Delete</button>
+      </div>
+    </div>`;
+}
+
+function renderExGroups(){
+  const box = el("exGroups");
+  if (!box || !train.current) return;
+  const groups = groupBy(train.sets, "exercise_name");
+  const names = [...new Set(train.sets.map(s => s.exercise_name))];
+  const total = el("setTotal");
+  if (total) total.textContent = train.sets.length ? `${train.sets.length} set${train.sets.length > 1 ? "s" : ""}` : "";
+  if (!names.length) {
+    box.innerHTML = '<div class="empty-hist">Pick an exercise above to start logging sets.</div>';
+    return;
+  }
+  box.innerHTML = names.map(name => {
+    const sets = groups[name];
+    const last = train.lastTime[name];
+    const lastLine = last && last.weight
+      ? `<div class="last-time">Last time: ${round1(Number(last.weight))} lbs${last.reps ? ` × ${last.reps}` : ""}${last.date ? ` · ${fmtDay(last.date)}` : ""}</div>`
+      : "";
+    return `
+      <div class="ex-group" data-ex="${escapeAttr(name)}">
+        <div class="ex-head">
+          <span class="ex-name">${escapeHtml(name)}</span>
+          <span><span class="ex-count">${sets.length} set${sets.length !== 1 ? "s" : ""}</span>
+          <button type="button" class="item-remove" data-action="delete-exercise" aria-label="Delete exercise">✕</button></span>
+        </div>
+        ${lastLine}
+        ${sets.map((set, i) => setRowHtml(set, i)).join("")}
+        <button type="button" class="add-item-btn" data-action="add-set">+ Add set</button>
+      </div>`;
+  }).join("");
+}
+
+function setRowHtml(set, i){
+  return `
+    <div class="set-row" data-id="${set.id}">
+      <div class="set-num">${i + 1}</div>
+      <div class="set-body">
+        <div class="set-fields">
+          <div class="item-macro-field"><label>Reps</label><input type="number" inputmode="numeric" min="0" data-field="reps" value="${set.reps ?? ""}" /></div>
+          <div class="item-macro-field cal"><label>Lbs</label><input type="number" inputmode="decimal" min="0" step="2.5" data-field="weight_lbs" value="${set.weight_lbs ?? ""}" /></div>
+          <div class="effort">
+            ${EFFORT_LEVELS.map(e => `<button type="button" class="effort-btn${set.effort_level === e.value ? " active" : ""}" data-action="effort" data-effort="${e.value}" title="${e.label} effort">${e.icon}</button>`).join("")}
+          </div>
+        </div>
+        <input class="set-note" data-field="notes" value="${escapeAttr(set.notes || "")}" placeholder="Notes (optional)" />
+      </div>
+      <button type="button" class="item-remove" data-action="delete-set" aria-label="Delete set">✕</button>
+    </div>`;
+}
+
+// ---- Lift tab events (delegated; #liftMain persists across renders) ----
+el("liftMain").addEventListener("input", (e) => {
+  const t = e.target;
+  if (!train.current) return;
+  if (t.dataset.sessionField) {
+    const field = t.dataset.sessionField;
+    const val = field === "notes" ? t.value : (t.value === "" ? null : parseInt(t.value, 10));
+    train.current[field] = val;
+    const id = train.current.id;
+    debounceSave(`session-${id}-${field}`, () => supabaseClient.from("workout_sessions").update({ [field]: val }).eq("id", id), 800);
+    return;
+  }
+  if (t.dataset.field) {
+    const row = t.closest(".set-row");
+    const set = train.sets.find(s => String(s.id) === row.dataset.id);
+    if (!set) return;
+    const field = t.dataset.field;
+    const val = field === "notes" ? t.value : (t.value === "" ? null : parseFloat(t.value));
+    set[field] = val; // keep memory in sync so a later re-render keeps what was typed
+    debounceSave(`set-${set.id}-${field}`, () => supabaseClient.from("exercise_sets").update({ [field]: val }).eq("id", set.id), 800);
+  }
+});
+
+el("liftMain").addEventListener("change", (e) => {
+  if (e.target.id === "exSelect") {
+    el("customExRow").style.display = e.target.value === "__custom" ? "flex" : "none";
+    if (e.target.value === "__custom") el("customEx").focus();
+  }
+});
+
+el("liftMain").addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-action]");
+  if (!btn) return;
+  const action = btn.dataset.action;
+
+  if (action === "pick-type") { train.pickType = btn.dataset.type; renderLiftMain(); return; }
+  if (action === "start-workout") {
+    el("liftMain").querySelectorAll("[data-action=start-workout]").forEach(b => b.disabled = true);
+    await startWorkout(train.pickType, btn.dataset.template || null);
+    return;
+  }
+  if (action === "go-walk") { showTab("walk"); return; }
+  if (action === "finish") { await finishWorkout(); return; }
+  if (action === "delete-session") { await deleteSession(); return; }
+
+  if (action === "add-exercise") {
+    let name = el("exSelect").value;
+    if (name === "__custom") name = el("customEx").value.trim();
+    if (!name) { setStatus("Pick an exercise first.", true); return; }
+    btn.disabled = true;
+    await addSet(name);
+    btn.disabled = false;
+    return;
+  }
+
+  const group = btn.closest(".ex-group");
+  if (action === "add-set" && group) { btn.disabled = true; await addSet(group.dataset.ex); return; }
+
+  if (action === "delete-exercise" && group) {
+    const name = group.dataset.ex;
+    if (!confirm(`Delete "${name}" and all its sets?`)) return;
+    const ids = train.sets.filter(s => s.exercise_name === name).map(s => s.id);
+    const { error } = await supabaseClient.from("exercise_sets").delete().in("id", ids);
+    if (error) { setStatus("Delete failed: " + error.message, true); return; }
+    train.sets = train.sets.filter(s => s.exercise_name !== name);
+    renderExGroups();
+    setStatus(`Removed ${name}.`);
+    return;
+  }
+
+  const row = btn.closest(".set-row");
+  const set = row && train.sets.find(s => String(s.id) === row.dataset.id);
+  if (!set) return;
+
+  if (action === "effort") {
+    const val = set.effort_level === btn.dataset.effort ? null : btn.dataset.effort; // tap again to clear
+    set.effort_level = val;
+    row.querySelectorAll(".effort-btn").forEach(b => b.classList.toggle("active", b.dataset.effort === val));
+    runSave(() => supabaseClient.from("exercise_sets").update({ effort_level: val }).eq("id", set.id));
+  } else if (action === "delete-set") {
+    const { error } = await supabaseClient.from("exercise_sets").delete().eq("id", set.id);
+    if (error) { setStatus("Delete failed: " + error.message, true); return; }
+    train.sets = train.sets.filter(s => s !== set);
+    renderExGroups();
+  }
+});
+
+// ---- Lift actions ----
+async function startWorkout(dayType, templateId = null){
+  if (!supabaseClient) { setStatus("Supabase isn't configured.", true); return; }
+  const { data, error } = await supabaseClient
+    .from("workout_sessions")
+    .insert([{ user_name: state.currentUser, day_type: dayType, session_date: localDateStr() }])
+    .select()
+    .single();
+  if (error) { console.error(error); setStatus("Couldn't start workout: " + error.message, true); renderLiftMain(); return; }
+  train.current = data;
+  train.sets = [];
+  train.lastTime = {};
+  let copied = 0;
+  if (templateId) copied = await copySetsFrom(templateId, data.id);
+  renderLiftMain();
+  if (templateId) {
+    // "Last time" hints come from the template session we just copied.
+    [...new Set(train.sets.map(s => s.exercise_name))].forEach(n => fetchLastTime(n).then(renderExGroups));
+  }
+  // Lifting today means today's macro targets should be the training-day set.
+  const copyMsg = templateId ? (copied ? ` Loaded ${copied} sets — edit reps/weights as you go.` : " Couldn't load last time's sets — starting blank.") : "";
+  if (!state.isTrainingToday) {
+    await setDayType(true);
+    setStatus("Workout started — today switched to Training Day targets." + copyMsg, templateId && !copied);
+  } else {
+    setStatus("Workout started." + copyMsg, templateId && !copied);
+  }
+  loadSessions();
+}
+
+// Copy every set of a past session into a new one as a starting point.
+// Reps and weight carry over; effort and set notes don't (they describe
+// how that day felt). created_at is spaced 1ms apart so exercise and set
+// order survive — a bulk insert would otherwise give every row the same
+// now() and the order would be arbitrary.
+async function copySetsFrom(templateId, newSessionId){
+  const { data: src, error } = await supabaseClient
+    .from("exercise_sets").select("*").eq("session_id", templateId)
+    .order("created_at", { ascending: true }).order("set_number", { ascending: true });
+  if (error || !src || !src.length) { if (error) console.error(error); return 0; }
+  const base = Date.now();
+  const rows = src.map((s, i) => ({
+    session_id: newSessionId,
+    exercise_name: s.exercise_name,
+    set_number: s.set_number,
+    reps: s.reps,
+    weight_lbs: s.weight_lbs,
+    created_at: new Date(base + i).toISOString(),
+  }));
+  const { data, error: insErr } = await supabaseClient.from("exercise_sets").insert(rows).select();
+  if (insErr) { console.error(insErr); return 0; }
+  train.sets = (data || []).sort((a, b) => a.created_at.localeCompare(b.created_at));
+  return train.sets.length;
+}
+
+async function addSet(name){
+  if (!train.current) return;
+  const existing = train.sets.filter(s => s.exercise_name === name);
+  const lastWithWeight = [...existing].reverse().find(s => s.weight_lbs);
+  let weight = lastWithWeight ? lastWithWeight.weight_lbs : null;
+  if (weight == null) {
+    const last = await fetchLastTime(name);
+    weight = (last && last.weight) || (DEFAULT_WEIGHTS[state.currentUser] || {})[name] || null;
+  }
+  const { data, error } = await supabaseClient
+    .from("exercise_sets")
+    .insert([{ session_id: train.current.id, exercise_name: name, set_number: existing.length + 1, weight_lbs: weight }])
+    .select()
+    .single();
+  if (error) { console.error(error); setStatus("Couldn't add set: " + error.message, true); renderExGroups(); return; }
+  train.sets.push(data);
+  renderExGroups();
+  renderSessionList();
+  if (el("exSelect")) { el("exSelect").value = ""; el("customExRow").style.display = "none"; el("customEx").value = ""; }
+  setStatus("");
+}
+
+async function finishWorkout(){
+  if (!train.current) return;
+  await flushSaves();
+  if (!train.current.finished_at) {
+    const { error } = await supabaseClient.from("workout_sessions")
+      .update({ finished_at: new Date().toISOString() }).eq("id", train.current.id);
+    if (error) { setStatus("Couldn't finish: " + error.message, true); return; }
+  }
+  const n = train.sets.length;
+  train.current = null; train.sets = []; train.lastTime = {};
+  renderLiftMain();
+  setStatus(`Workout saved — ${n} set${n !== 1 ? "s" : ""}.`);
+  loadSessions();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+async function deleteSession(){
+  if (!train.current) return;
+  if (!confirm("Delete this workout and all its sets?")) return;
+  const id = train.current.id;
+  Object.keys(pendingSaves).forEach(k => { clearTimeout(pendingSaves[k].t); delete pendingSaves[k]; });
+  // Sets cascade in the new schema; delete them explicitly too in case they don't.
+  await supabaseClient.from("exercise_sets").delete().eq("session_id", id);
+  const { error } = await supabaseClient.from("workout_sessions").delete().eq("id", id);
+  if (error) { setStatus("Delete failed: " + error.message, true); return; }
+  train.current = null; train.sets = [];
+  renderLiftMain();
+  setStatus("Workout deleted.");
+  loadSessions();
+}
+
+// ---- Recent workouts list ----
+function renderSessionList(){
+  const list = el("sessionList");
+  if (!train.sessions.length) { list.innerHTML = '<div class="empty-hist">No workouts yet.</div>'; return; }
+  list.innerHTML = train.sessions.map(s => {
+    const p = programFor(s.day_type);
+    const count = sessionSetCount(s);
+    const dur = fmtDuration(s.duration_minutes, s.duration_seconds);
+    const open = !s.finished_at && s.session_date === localDateStr() ? " · in progress" : "";
+    return `
+      <div class="log-item clickable" data-id="${s.id}" style="--day-color:${p.color}">
+        <div style="min-width:0;">
+          <div class="name"><span class="type-tag">${escapeHtml(p.label)}</span>${fmtDay(s.session_date)}</div>
+          <div class="meta">${count} set${count !== 1 ? "s" : ""}${dur ? " · " + dur : ""}${open}</div>
+          ${s.notes ? `<div class="note-preview">${escapeHtml(s.notes)}</div>` : ""}
+        </div>
+        <div class="macros">Open ›</div>
+      </div>`;
+  }).join("");
+}
+
+el("sessionList").addEventListener("click", (e) => {
+  const row = e.target.closest(".log-item");
+  if (row) openSession(row.dataset.id);
+});
+
+// ---- Walk tab ----
+function resetWalkForm(){
+  train.editingWalkId = null;
+  el("walkDate").value = localDateStr();
+  el("walkMiles").value = "";
+  el("walkMinutes").value = "";
+  el("walkNotes").value = "";
+  el("walkFormTitle").textContent = "Log a Walk";
+  el("saveWalkBtn").textContent = "Log Walk";
+  el("cancelWalkBtn").style.display = "none";
+}
+
+el("cancelWalkBtn").addEventListener("click", () => { resetWalkForm(); setStatus(""); });
+
+el("saveWalkBtn").addEventListener("click", async () => {
+  if (!supabaseClient) { setStatus("Supabase isn't configured.", true); return; }
+  const miles = parseFloat(el("walkMiles").value);
+  if (!(miles > 0)) { setStatus("Enter the miles walked.", true); return; }
+  const mins = el("walkMinutes").value === "" ? null : parseInt(el("walkMinutes").value, 10);
+  const payload = {
+    user_name: state.currentUser,
+    walk_date: el("walkDate").value || localDateStr(),
+    miles,
+    duration_minutes: mins,
+    notes: el("walkNotes").value.trim() || null,
+  };
+  el("saveWalkBtn").disabled = true;
+  const q = train.editingWalkId
+    ? supabaseClient.from("walks").update(payload).eq("id", train.editingWalkId)
+    : supabaseClient.from("walks").insert([payload]);
+  const { error } = await q;
+  el("saveWalkBtn").disabled = false;
+  if (error) { console.error(error); setStatus("Save failed: " + error.message, true); return; }
+  setStatus(train.editingWalkId ? "Walk updated." : `Logged ${round1(miles)} mi.`);
+  resetWalkForm();
+  loadWalks();
+});
+
+function renderWalkList(){
+  const list = el("walkList");
+  if (!train.walks.length) { list.innerHTML = '<div class="empty-hist">No walks yet.</div>'; return; }
+  list.innerHTML = train.walks.map(w => {
+    const pace = fmtPace(Number(w.miles), Number(w.duration_minutes));
+    return `
+      <div class="log-item" data-id="${w.id}">
+        <div style="min-width:0;flex:1;">
+          <div class="name">${round1(Number(w.miles))} mi</div>
+          <div class="meta">${fmtDay(w.walk_date)}${w.duration_minutes ? ` · ${w.duration_minutes} min` : ""}${pace ? ` · ${pace}` : ""}</div>
+          ${w.notes ? `<div class="note-preview">${escapeHtml(w.notes)}</div>` : ""}
+        </div>
+        <div class="actions">
+          <button type="button" class="log-item-delete" data-action="edit-walk" aria-label="Edit walk">✎</button>
+          <button type="button" class="log-item-delete" data-action="delete-walk" aria-label="Delete walk">✕</button>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+el("walkList").addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-action]");
+  if (!btn) return;
+  const id = btn.closest(".log-item").dataset.id;
+  const walk = train.walks.find(w => String(w.id) === id);
+  if (!walk) return;
+  if (btn.dataset.action === "edit-walk") {
+    train.editingWalkId = walk.id;
+    el("walkDate").value = walk.walk_date;
+    el("walkMiles").value = walk.miles;
+    el("walkMinutes").value = walk.duration_minutes ?? "";
+    el("walkNotes").value = walk.notes || "";
+    el("walkFormTitle").textContent = "Edit Walk";
+    el("saveWalkBtn").textContent = "Save Changes";
+    el("cancelWalkBtn").style.display = "block";
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  } else if (btn.dataset.action === "delete-walk") {
+    if (!confirm("Delete this walk?")) return;
+    btn.disabled = true;
+    const { error } = await supabaseClient.from("walks").delete().eq("id", walk.id);
+    if (error) { setStatus("Delete failed: " + error.message, true); btn.disabled = false; return; }
+    if (train.editingWalkId === walk.id) resetWalkForm();
+    setStatus("Walk deleted.");
+    loadWalks();
+  }
+});
+
+// ---- Charts shared helper (matches the nutrition day chart) ----
+const CHART_FONT = { family: "'IBM Plex Mono'", size: 10 };
+function makeChart(canvas, type, labels, values, color, unit){
+  return new Chart(canvas.getContext("2d"), {
+    type,
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: type === "bar" ? color : color + "22",
+        borderColor: color,
+        borderWidth: type === "bar" ? 0 : 2.5,
+        borderRadius: 2,
+        maxBarThickness: 14,
+        pointBackgroundColor: color,
+        pointRadius: 3,
+        fill: type === "line",
+        tension: 0.2,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => `${c.parsed.y} ${unit}` } } },
+      scales: {
+        y: { beginAtZero: type === "bar", ticks: { font: CHART_FONT }, title: { display: true, text: unit, font: CHART_FONT } },
+        x: { ticks: { font: CHART_FONT, maxRotation: 0, autoSkip: true, maxTicksLimit: 6 } },
+      },
+    },
+  });
+}
+function statCard(label, value, unit, color){
+  return `<div class="stat-card"><div class="stat-label">${label}</div><div><span class="stat-cal" style="color:${color || "var(--ink)"}">${value}</span>${unit ? `<span class="stat-cal-unit">${unit}</span>` : ""}</div></div>`;
+}
+
+// ---- Lifting stats ----
+let liftChart = null;
+let liftHistory = []; // all of this user's sets with their session date
+
+async function refreshLiftStats(){
+  if (!supabaseClient) return;
+  const user = state.currentUser;
+  const [sessRes, setsRes] = await Promise.all([
+    supabaseClient.from("workout_sessions").select("id, session_date, exercise_sets(count)")
+      .eq("user_name", user).gte("session_date", daysAgoStr(29)),
+    supabaseClient.from("exercise_sets")
+      .select("exercise_name, weight_lbs, reps, workout_sessions!inner(session_date, user_name)")
+      .eq("workout_sessions.user_name", user)
+      .order("created_at", { ascending: true })
+      .limit(5000),
+  ]);
+  if (user !== state.currentUser) return;
+  if (sessRes.error || setsRes.error) { console.error(sessRes.error || setsRes.error); setStatus("Couldn't load lifting stats.", true); return; }
+
+  const week = daysAgoStr(6);
+  const month = sessRes.data || [];
+  const inWeek = month.filter(s => s.session_date >= week);
+  el("liftWeekCount").textContent = inWeek.length;
+  el("liftWeekSets").textContent = inWeek.reduce((a, s) => a + ((s.exercise_sets && s.exercise_sets[0] && s.exercise_sets[0].count) || 0), 0);
+  el("liftMonthCount").textContent = month.length;
+
+  liftHistory = (setsRes.data || []).map(s => ({
+    name: s.exercise_name,
+    weight: Number(s.weight_lbs) || 0,
+    reps: s.reps,
+    date: s.workout_sessions ? s.workout_sessions.session_date : null,
+  })).filter(s => s.date);
+
+  // Exercise picker: everything in the program plus any custom lifts logged.
+  const logged = new Set(liftHistory.map(s => s.name));
+  const all = [...new Set([...Object.values(PROGRAM).flatMap(p => p.exercises), ...logged])].sort();
+  const sel = el("progressExercise");
+  let chosen = sel.value;
+  if (!chosen || !all.includes(chosen)) {
+    try { chosen = localStorage.getItem("dailyFactsExercise") || ""; } catch (e) { chosen = ""; }
+    if (!logged.has(chosen)) chosen = liftHistory.length ? liftHistory[liftHistory.length - 1].name : "";
+  }
+  sel.innerHTML = `<option value="">— Choose exercise —</option>` +
+    all.map(n => `<option value="${escapeAttr(n)}"${n === chosen ? " selected" : ""}>${escapeHtml(n)}${logged.has(n) ? "" : " (no data)"}</option>`).join("");
+  renderLiftChart();
+}
+
+el("progressExercise").addEventListener("change", () => {
+  try { localStorage.setItem("dailyFactsExercise", el("progressExercise").value); } catch (e) { /* ignore */ }
+  renderLiftChart();
+});
+
+function renderLiftChart(){
+  const name = el("progressExercise").value;
+  const area = el("liftChartArea");
+  const statsBox = el("liftChartStats");
+  if (liftChart) { liftChart.destroy(); liftChart = null; }
+  statsBox.innerHTML = "";
+  if (!name) { area.innerHTML = '<div class="stats-empty">Pick an exercise.</div>'; return; }
+  const byDate = {};
+  liftHistory.filter(s => s.name === name).forEach(s => {
+    byDate[s.date] = Math.max(byDate[s.date] || 0, s.weight);
+  });
+  const points = Object.entries(byDate).sort(([a], [b]) => a.localeCompare(b));
+  if (!points.length) { area.innerHTML = `<div class="stats-empty">No sets logged for ${escapeHtml(name)} yet.</div>`; return; }
+  area.innerHTML = '<div class="chart-wrap"><canvas id="liftChart"></canvas></div>';
+  liftChart = makeChart(el("liftChart"), "line",
+    points.map(([d]) => fmtDay(d).replace(/^\w+, /, "")), points.map(([, w]) => w), PROGRAM.push.color, "lbs");
+  const first = points[0][1], last = points[points.length - 1][1];
+  const best = Math.max(...points.map(([, w]) => w));
+  const diff = round1(last - first);
+  statsBox.innerHTML = `<div class="stat-grid">
+    ${statCard("Starting", round1(first), "lbs")}
+    ${statCard("Current", round1(last), "lbs")}
+    ${statCard("Best", round1(best), "lbs")}
+    ${statCard("Change", (diff >= 0 ? "+" : "") + diff, "lbs", diff >= 0 ? "var(--protein)" : "var(--cal)")}
+  </div>`;
+}
+
+// ---- Walking stats ----
+let walkChart = null;
+
+async function refreshWalkStats(){
+  if (!supabaseClient) return;
+  const user = state.currentUser;
+  const { data, error } = await supabaseClient
+    .from("walks").select("walk_date, miles, duration_minutes")
+    .eq("user_name", user).order("walk_date", { ascending: true }).limit(5000);
+  if (user !== state.currentUser) return;
+  if (error) { console.error(error); setStatus("Couldn't load walking stats.", true); return; }
+  const walks = (data || []).map(w => ({ date: w.walk_date, miles: Number(w.miles) || 0 }));
+
+  const sumSince = (ds) => {
+    const list = walks.filter(w => w.date >= ds);
+    return { miles: list.reduce((a, w) => a + w.miles, 0), n: list.length };
+  };
+  const wk = sumSince(daysAgoStr(6)), mo = sumSince(daysAgoStr(29));
+  el("walkWeekMiles").textContent = round1(wk.miles);
+  el("walkWeekMeta").textContent = `${wk.n} walk${wk.n !== 1 ? "s" : ""}`;
+  el("walkMonthMiles").textContent = round1(mo.miles);
+  el("walkMonthMeta").textContent = `${mo.n} walk${mo.n !== 1 ? "s" : ""}`;
+
+  // One bar per day for the last 30 days (multiple walks a day are summed).
+  const byDate = {};
+  walks.forEach(w => { byDate[w.date] = (byDate[w.date] || 0) + w.miles; });
+  const days = Array.from({ length: 30 }, (_, i) => daysAgoStr(29 - i));
+  if (walkChart) walkChart.destroy();
+  walkChart = makeChart(el("walkChart"), "bar",
+    days.map(d => fmtDay(d).replace(/^\w+, /, "")), days.map(d => round1(byDate[d] || 0)), WALK_COLOR, "mi");
+
+  const total = walks.reduce((a, w) => a + w.miles, 0);
+  const best = walks.length ? Math.max(...walks.map(w => w.miles)) : 0;
+  el("walkAllTime").innerHTML = `
+    ${statCard("All-time walks", walks.length)}
+    ${statCard("All-time miles", round1(total), "mi")}
+    ${statCard("Avg walk", walks.length ? round1(total / walks.length) : 0, "mi")}
+    ${statCard("Longest", round1(best), "mi", WALK_COLOR)}`;
+}
+
+// ---- User switching + boot ----
+async function onTrainingUserChange(){
+  await flushSaves();
+  train.current = null; train.sets = []; train.lastTime = {};
+  train.sessions = []; train.walks = [];
+  resetWalkForm();
+  renderLiftMain(); renderSessionList(); renderWalkList();
+  await Promise.all([loadSessions(), loadWalks()]);
+  await resumeOpenSession();
+}
+
+async function initTraining(){
+  resetWalkForm();
+  renderLiftMain();
+  let tab = "log";
+  try { tab = localStorage.getItem("dailyFactsTab") || "log"; } catch (e) { /* ignore */ }
+  let urlTab = new URLSearchParams(window.location.search).get("tab");
+  if (urlTab === "food") urlTab = "log";
+  if (urlTab && TAB_PANELS[urlTab]) tab = urlTab;
+  if (TAB_PANELS[tab] && tab !== "log") showTab(tab);
+  await Promise.all([loadSessions(), loadWalks()]);
+  await resumeOpenSession();
+}
+
+// =====================================================================
+// SIGN-IN (Supabase Auth, email + password; accounts are created in the dashboard)
+// =====================================================================
+let booted = false;
+
+function showGate(msg, isErr = false){
+  el("appBody").style.display = "none";
+  el("authGate").style.display = "block";
+  let last = "";
+  try { last = localStorage.getItem("dailyFactsEmail") || ""; } catch (e) { /* ignore */ }
+  if (!el("authEmail").value) el("authEmail").value = last;
+  authStatus(msg || "", isErr);
+}
+function authStatus(msg, isErr = false){
+  el("authStatus").textContent = msg;
+  el("authStatus").classList.toggle("err", !!isErr);
+}
+
+async function bootApp(session){
+  const email = ((session && session.user && session.user.email) || "").toLowerCase();
+  if (!HOUSEHOLD[email]) {
+    await supabaseClient.auth.signOut();
+    showGate("That account isn't on the household list.", true);
+    return;
+  }
+  el("authGate").style.display = "none";
+  el("appBody").style.display = "block";
+  el("signOutBtn").title = "Signed in as " + email + " — sign out";
+  if (booted) return;
+  booted = true;
+  if (!resolveInitialUser()) {
+    // First visit on this device and no ?user= — log as whoever signed in.
+    state.currentUser = HOUSEHOLD[email];
+    el("userSelect").value = state.currentUser;
+  }
+  loadHistory();
+  loadDayType();
+  initTraining();
+}
+
+async function signIn(e){
+  if (e) e.preventDefault();
+  if (el("signInBtn").disabled) return;
+  const email = el("authEmail").value.trim().toLowerCase();
+  const password = el("authPassword").value;
+  if (!HOUSEHOLD[email]) { authStatus("That email isn't on the household list.", true); return; }
+  if (!password) { authStatus("Enter your password.", true); return; }
+  el("signInBtn").disabled = true;
+  authStatus("Signing in…");
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  el("signInBtn").disabled = false;
+  if (error || !data.session) {
+    console.warn(error);
+    authStatus(error && /rate|too many/i.test(error.message)
+      ? "Too many attempts — wait a minute and try again."
+      : "Wrong email or password.", true);
+    return;
+  }
+  try { localStorage.setItem("dailyFactsEmail", email); } catch (err) { /* ignore */ }
+  el("authPassword").value = "";
+  authStatus("");
+  bootApp(data.session);
+}
+
+el("signInForm").addEventListener("submit", signIn);
+el("signOutBtn").addEventListener("click", async () => {
+  if (!confirm("Sign out of Daily Facts on this device?")) return;
+  await flushSaves();
+  await supabaseClient.auth.signOut();
+  window.location.reload();
+});
+
+if (supabaseClient) {
+  supabaseClient.auth.getSession().then(({ data }) => {
+    if (data && data.session) bootApp(data.session); else showGate();
+  });
+  supabaseClient.auth.onAuthStateChange((event, session) => {
+    if (event === "SIGNED_OUT") { booted = false; showGate("Signed out."); }
+    else if (event === "SIGNED_IN" && session && !booted) bootApp(session);
+  });
+}
+</script>
+</body>
+</html>
