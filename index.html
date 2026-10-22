@@ -259,6 +259,13 @@
   .dot.protein{background:var(--protein);}
   .dot.carb{background:var(--carb);}
   .dot.fat{background:var(--fat);}
+  /* Indented sub-rows (Fiber under Net Carbs, Saturated Fat under Fat), like a real label */
+  .macro-row.sub{padding:4px 0 4px 17px;}
+  .macro-row.sub .macro-label{font-size:12px;font-weight:500;color:var(--muted);}
+  .macro-row.sub .total-num{font-size:13px;font-weight:500;}
+  .dot.sub{width:7px;height:7px;background:transparent;border:1.5px solid var(--muted);}
+  .dot.sub.carb{border-color:var(--carb);}
+  .dot.sub.fat{border-color:var(--fat);}
   .macro-row input{
     font-family:'IBM Plex Mono',monospace;
     font-weight:600;
@@ -396,6 +403,18 @@
   .item-macro-field.protein input{color:var(--protein);}
   .item-macro-field.carb input{color:var(--carb);}
   .item-macro-field.fat input{color:var(--fat);}
+  .item-macro-field.fiber input{color:var(--carb);}
+  .item-macro-field.satfat input{color:var(--fat);}
+  /* Food rows only (workout set rows share .item-macros, so this is scoped):
+     3 columns x 2 rows, grouped Kcal/Protein | Net Carb/Fiber | Fat/Sat Fat */
+  .item-macros.food-macros{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    grid-template-rows:repeat(2,auto);
+    grid-auto-flow:column;
+    gap:6px 10px;
+  }
+  .item-macros.food-macros .item-macro-field input{width:100%;}
   .add-item-btn{
     width:100%;
     background:var(--paper);
@@ -554,6 +573,7 @@
     color:var(--ink);
   }
   .progress-row-top .p-nums{color:var(--muted);}
+  .progress-row-top .p-nums.over{color:var(--cal);font-weight:600;}
   .progress-track{
     height:8px;
     background:var(--line);
@@ -762,6 +782,7 @@
     font-family:'IBM Plex Mono',monospace;
     font-size:12px;
   }
+  .day-totals.secondary{margin-top:-8px;border-top:none;}
   .day-totals .dt-item{text-align:center;flex:1;}
   .day-totals .dt-value{font-size:16px;font-weight:700;display:block;}
   .day-totals .dt-label{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:0.06em;}
@@ -1185,14 +1206,18 @@
           <label>Calories<input type="number" id="goalRestCal" /></label>
           <label>Protein g<input type="number" id="goalRestProtein" /></label>
           <label>Net Carbs g<input type="number" id="goalRestCarb" /></label>
+          <label>Fiber g (target)<input type="number" id="goalRestFiber" /></label>
           <label>Fat g<input type="number" id="goalRestFat" /></label>
+          <label>Sat Fat g (limit)<input type="number" id="goalRestSatFat" /></label>
         </div>
         <div class="goals-col">
           <h3>Training Day</h3>
           <label>Calories<input type="number" id="goalTrainCal" /></label>
           <label>Protein g<input type="number" id="goalTrainProtein" /></label>
           <label>Net Carbs g<input type="number" id="goalTrainCarb" /></label>
+          <label>Fiber g (target)<input type="number" id="goalTrainFiber" /></label>
           <label>Fat g<input type="number" id="goalTrainFat" /></label>
+          <label>Sat Fat g (limit)<input type="number" id="goalTrainSatFat" /></label>
         </div>
       </div>
       <button type="button" class="btn-primary btn-full" id="saveGoalsBtn">Save Goals</button>
@@ -1213,6 +1238,10 @@
         <div class="dt-item"><span class="dt-value" id="dtProtein">0</span><span class="dt-label">Protein g</span></div>
         <div class="dt-item"><span class="dt-value" id="dtCarb">0</span><span class="dt-label">Net Carbs g</span></div>
         <div class="dt-item"><span class="dt-value" id="dtFat">0</span><span class="dt-label">Fat g</span></div>
+      </div>
+      <div class="day-totals secondary">
+        <div class="dt-item"><span class="dt-value" id="dtFiber">0</span><span class="dt-label">Fiber g</span></div>
+        <div class="dt-item"><span class="dt-value" id="dtSatFat">0</span><span class="dt-label">Sat Fat g</span></div>
       </div>
       <div class="chart-wrap"><canvas id="dayChart"></canvas></div>
       <div class="day-entries" id="dayEntries"></div>
@@ -1261,9 +1290,9 @@ const state = {
   base64: null,
   mediaType: null,
   estimate: null, // {food_name, confidence_note}
-  items: [],      // [{id, name, quantity, calories, protein_g, carbs_g, fat_g}]
+  items: [],      // [{id, name, quantity, calories, protein_g, carbs_g, fat_g, saturated_fat_g, fiber_g}]
   mealType: null,
-  totals: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+  totals: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, saturated_fat_g: 0, fiber_g: 0 },
   currentUser: "Nick",
   activeTab: "log",
 };
@@ -1516,7 +1545,7 @@ async function estimateMacros(){
     renderFacts({
       food_name: "New Plate",
       confidence_note: "Manual entry — estimate failed.",
-      items: [{ name: "", quantity: "1 serving", calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }]
+      items: [emptyItem()]
     });
   } finally {
     el("estimateBtn").disabled = false;
@@ -1551,7 +1580,7 @@ async function estimateFromDescription(){
     renderFacts({
       food_name: "New Plate",
       confidence_note: "Manual entry — estimate failed.",
-      items: [{ name: "", quantity: "1 serving", calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }]
+      items: [emptyItem()]
     });
   } finally {
     el("describeBtn").disabled = false;
@@ -1561,7 +1590,7 @@ async function estimateFromDescription(){
 // ---- Nutrition Facts panel ----
 function renderFacts(est){
   const rawItems = (est.items && est.items.length) ? est.items
-    : [{ name: "", quantity: "1 serving", calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }];
+    : [emptyItem()];
   state.items = rawItems.map(it => ({
     id: newItemId(),
     name: it.name || "",
@@ -1570,6 +1599,8 @@ function renderFacts(est){
     protein_g: num(it.protein_g),
     carbs_g: num(it.carbs_g),
     fat_g: num(it.fat_g),
+    saturated_fat_g: num(it.saturated_fat_g),
+    fiber_g: num(it.fiber_g),
   }));
   state.mealType = guessMealType();
 
@@ -1593,9 +1624,17 @@ function renderFacts(est){
         <span class="macro-label"><span class="dot carb"></span>Net Carbs</span>
         <span><span class="total-num" id="totalCarb">0</span><span class="unit">g</span></span>
       </div>
+      <div class="macro-row sub">
+        <span class="macro-label"><span class="dot sub carb"></span>Fiber</span>
+        <span><span class="total-num" id="totalFiber">0</span><span class="unit">g</span></span>
+      </div>
       <div class="macro-row">
         <span class="macro-label"><span class="dot fat"></span>Fat</span>
         <span><span class="total-num" id="totalFat">0</span><span class="unit">g</span></span>
+      </div>
+      <div class="macro-row sub">
+        <span class="macro-label"><span class="dot sub fat"></span>Saturated Fat</span>
+        <span><span class="total-num" id="totalSatFat">0</span><span class="unit">g</span></span>
       </div>
       <div class="rule-thin"></div>
       <div class="notes">${escapeHtml(est.confidence_note || "")}</div>
@@ -1628,11 +1667,13 @@ function itemRowHtml(item){
         <button type="button" class="item-lookup" data-action="lookup" title="Look up macros for this item">⌕ Est.</button>
         <button type="button" class="item-remove" data-action="remove" aria-label="Remove item">✕</button>
       </div>
-      <div class="item-macros">
+      <div class="item-macros food-macros">
         <div class="item-macro-field cal"><label>Kcal</label><input type="number" inputmode="numeric" data-field="calories" value="${num(item.calories)}" /></div>
         <div class="item-macro-field protein"><label>Protein g</label><input type="number" inputmode="decimal" data-field="protein_g" value="${num(item.protein_g)}" /></div>
         <div class="item-macro-field carb"><label>Net Carb g</label><input type="number" inputmode="decimal" data-field="carbs_g" value="${num(item.carbs_g)}" /></div>
+        <div class="item-macro-field fiber"><label>Fiber g</label><input type="number" inputmode="decimal" data-field="fiber_g" value="${num(item.fiber_g)}" /></div>
         <div class="item-macro-field fat"><label>Fat g</label><input type="number" inputmode="decimal" data-field="fat_g" value="${num(item.fat_g)}" /></div>
+        <div class="item-macro-field satfat"><label>Sat Fat g</label><input type="number" inputmode="decimal" data-field="saturated_fat_g" value="${num(item.saturated_fat_g)}" /></div>
       </div>
     </div>
   `;
@@ -1686,6 +1727,8 @@ async function lookupItemMacros(item, btn){
     item.protein_g = num(est.protein_g);
     item.carbs_g = num(est.carbs_g);
     item.fat_g = num(est.fat_g);
+    item.saturated_fat_g = num(est.saturated_fat_g);
+    item.fiber_g = num(est.fiber_g);
     renderItemsList();
     setStatus(`Updated macros for ${name}.`);
   } catch (err) {
@@ -1697,7 +1740,7 @@ async function lookupItemMacros(item, btn){
 }
 
 function onAddItem(){
-  state.items.push({ id: newItemId(), name: "", quantity: "1 serving", calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
+  state.items.push({ id: newItemId(), ...emptyItem() });
   renderItemsList();
   const rows = el("itemsList").querySelectorAll(".item-row");
   const last = rows[rows.length - 1];
@@ -1714,19 +1757,27 @@ function onMealSelect(e){
 
 function round1(n){ return Math.round(n * 10) / 10; }
 
+function emptyItem(){
+  return { name: "", quantity: "1 serving", calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, saturated_fat_g: 0, fiber_g: 0 };
+}
+
 function recomputeTotals(){
   const totals = state.items.reduce((acc, i) => {
     acc.calories += num(i.calories);
     acc.protein_g += num(i.protein_g);
     acc.carbs_g += num(i.carbs_g);
     acc.fat_g += num(i.fat_g);
+    acc.saturated_fat_g += num(i.saturated_fat_g);
+    acc.fiber_g += num(i.fiber_g);
     return acc;
-  }, { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
+  }, { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, saturated_fat_g: 0, fiber_g: 0 });
   state.totals = totals;
   el("totalCal").textContent = Math.round(totals.calories);
   el("totalProtein").textContent = round1(totals.protein_g);
   el("totalCarb").textContent = round1(totals.carbs_g);
   el("totalFat").textContent = round1(totals.fat_g);
+  el("totalFiber").textContent = round1(totals.fiber_g);
+  el("totalSatFat").textContent = round1(totals.saturated_fat_g);
 }
 
 function num(n){ return (typeof n === "number" && !isNaN(n)) ? n : (Number(n) || 0); }
@@ -1744,6 +1795,8 @@ async function saveEntry(){
     protein_g: round1(state.totals.protein_g),
     carbs_g: round1(state.totals.carbs_g),
     fat_g: round1(state.totals.fat_g),
+    saturated_fat_g: round1(state.totals.saturated_fat_g),
+    fiber_g: round1(state.totals.fiber_g),
     items: state.items.map(({ id, ...rest }) => rest),
     notes: state.estimate ? (state.estimate.confidence_note || null) : null,
   };
@@ -1816,7 +1869,7 @@ async function reuseMeal(id, btn){
   if (typeof items === "string") { try { items = JSON.parse(items); } catch (e) { items = null; } }
   if (!Array.isArray(items) || !items.length) {
     // Older/manual entries may have totals only — carry them as one line item.
-    items = [{ name: row.food_name, quantity: "1 serving", calories: row.calories, protein_g: row.protein_g, carbs_g: row.carbs_g, fat_g: row.fat_g }];
+    items = [{ name: row.food_name, quantity: "1 serving", calories: row.calories, protein_g: row.protein_g, carbs_g: row.carbs_g, fat_g: row.fat_g, saturated_fat_g: row.saturated_fat_g, fiber_g: row.fiber_g }];
   }
   const when = new Date(row.created_at).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 
@@ -1885,14 +1938,16 @@ function sumRows(rows){
     acc.protein_g += Number(r.protein_g) || 0;
     acc.carbs_g += Number(r.carbs_g) || 0;
     acc.fat_g += Number(r.fat_g) || 0;
+    acc.saturated_fat_g += Number(r.saturated_fat_g) || 0;
+    acc.fiber_g += Number(r.fiber_g) || 0;
     return acc;
-  }, { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
+  }, { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, saturated_fat_g: 0, fiber_g: 0 });
 }
 
 async function fetchRowsInRange(startIso, endIso){
   const { data, error } = await supabaseClient
     .from("plate_logs")
-    .select("id, food_name, meal_type, calories, protein_g, carbs_g, fat_g, created_at")
+    .select("id, food_name, meal_type, calories, protein_g, carbs_g, fat_g, saturated_fat_g, fiber_g, created_at")
     .eq("user_name", state.currentUser)
     .gte("created_at", startIso)
     .lt("created_at", endIso)
@@ -1945,8 +2000,8 @@ async function setDayType(isTraining){
 
 // ---- Goals ----
 state.goals = {
-  rest: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
-  training: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+  rest: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, saturated_fat_g: 0, fiber_g: 0 },
+  training: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, saturated_fat_g: 0, fiber_g: 0 },
 };
 
 async function loadGoals(){
@@ -1958,16 +2013,21 @@ async function loadGoals(){
   if (error) { console.error(error); return; }
   const restRow = (data || []).find(g => !g.is_training);
   const trainRow = (data || []).find(g => g.is_training);
-  state.goals.rest = restRow || { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
-  state.goals.training = trainRow || { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+  const blank = { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, saturated_fat_g: 0, fiber_g: 0 };
+  state.goals.rest = restRow || blank;
+  state.goals.training = trainRow || blank;
   el("goalRestCal").value = state.goals.rest.calories || "";
   el("goalRestProtein").value = state.goals.rest.protein_g || "";
   el("goalRestCarb").value = state.goals.rest.carbs_g || "";
   el("goalRestFat").value = state.goals.rest.fat_g || "";
+  el("goalRestFiber").value = state.goals.rest.fiber_g || "";
+  el("goalRestSatFat").value = state.goals.rest.saturated_fat_g || "";
   el("goalTrainCal").value = state.goals.training.calories || "";
   el("goalTrainProtein").value = state.goals.training.protein_g || "";
   el("goalTrainCarb").value = state.goals.training.carbs_g || "";
   el("goalTrainFat").value = state.goals.training.fat_g || "";
+  el("goalTrainFiber").value = state.goals.training.fiber_g || "";
+  el("goalTrainSatFat").value = state.goals.training.saturated_fat_g || "";
 }
 
 el("saveGoalsBtn").addEventListener("click", saveGoals);
@@ -1980,6 +2040,8 @@ async function saveGoals(){
     protein_g: Number(el("goalRestProtein").value) || 0,
     carbs_g: Number(el("goalRestCarb").value) || 0,
     fat_g: Number(el("goalRestFat").value) || 0,
+    saturated_fat_g: Number(el("goalRestSatFat").value) || 0,
+    fiber_g: Number(el("goalRestFiber").value) || 0,
   };
   const training = {
     user_name: state.currentUser, is_training: true,
@@ -1987,6 +2049,8 @@ async function saveGoals(){
     protein_g: Number(el("goalTrainProtein").value) || 0,
     carbs_g: Number(el("goalTrainCarb").value) || 0,
     fat_g: Number(el("goalTrainFat").value) || 0,
+    saturated_fat_g: Number(el("goalTrainSatFat").value) || 0,
+    fiber_g: Number(el("goalTrainFiber").value) || 0,
   };
   el("saveGoalsBtn").disabled = true;
   const { error } = await supabaseClient.from("user_goals").upsert([rest, training], { onConflict: "user_name,is_training" });
@@ -2001,12 +2065,15 @@ async function saveGoals(){
 function renderProgressBars(){
   el("dayTypeTag").textContent = state.isTrainingToday ? "Training Day" : "Rest Day";
   const goalSet = state.isTrainingToday ? state.goals.training : state.goals.rest;
-  const t = state.todayTotals || { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+  const t = state.todayTotals || { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, saturated_fat_g: 0, fiber_g: 0 };
+  // `cap: true` = a limit to stay under (bar turns red once exceeded) rather than a target to reach.
   const rows = [
     { label: "Calories", consumed: t.calories, goal: goalSet.calories, unit: " kcal", color: "var(--cal)" },
     { label: "Protein", consumed: t.protein_g, goal: goalSet.protein_g, unit: "g", color: "var(--protein)" },
     { label: "Net Carbs", consumed: t.carbs_g, goal: goalSet.carbs_g, unit: "g", color: "var(--carb)" },
+    { label: "Fiber", consumed: t.fiber_g, goal: goalSet.fiber_g, unit: "g", color: "var(--carb)" },
     { label: "Fat", consumed: t.fat_g, goal: goalSet.fat_g, unit: "g", color: "var(--fat)" },
+    { label: "Sat Fat", consumed: t.saturated_fat_g, goal: goalSet.saturated_fat_g, unit: "g", color: "var(--fat)", cap: true },
   ];
   el("progressBars").innerHTML = rows.map(r => {
     if (!r.goal || r.goal <= 0) {
@@ -2017,10 +2084,13 @@ function renderProgressBars(){
         </div>`;
     }
     const pct = Math.max(0, Math.min(100, Math.round((r.consumed / r.goal) * 100)));
+    const over = r.cap && r.consumed > r.goal;
+    const fill = over ? "var(--cal)" : r.color;
+    const overNote = over ? ` · over by ${round1(r.consumed - r.goal)}${r.unit}` : "";
     return `
       <div class="progress-row">
-        <div class="progress-row-top"><span class="p-label">${r.label}</span><span class="p-nums">${round1(r.consumed)} / ${round1(r.goal)}${r.unit}</span></div>
-        <div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:${r.color};"></div></div>
+        <div class="progress-row-top"><span class="p-label">${r.label}</span><span class="p-nums${over ? " over" : ""}">${round1(r.consumed)} / ${round1(r.goal)}${r.unit}${overNote}</span></div>
+        <div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:${fill};"></div></div>
       </div>`;
   }).join("");
 }
@@ -2080,11 +2150,11 @@ async function refreshStats(){
   const t = sumRows(todayRows);
   state.todayTotals = t;
   el("todayCal").textContent = Math.round(t.calories);
-  el("todayMacros").textContent = `P${round1(t.protein_g)} · C${round1(t.carbs_g)} · F${round1(t.fat_g)}`;
+  el("todayMacros").innerHTML = `P${round1(t.protein_g)} · C${round1(t.carbs_g)} · F${round1(t.fat_g)}<br>Fiber ${round1(t.fiber_g)} · Sat ${round1(t.saturated_fat_g)}`;
 
   const w = sumRows(weekRows);
   el("weekCal").textContent = Math.round(w.calories);
-  el("weekMacros").textContent = `P${round1(w.protein_g)} · C${round1(w.carbs_g)} · F${round1(w.fat_g)}`;
+  el("weekMacros").innerHTML = `P${round1(w.protein_g)} · C${round1(w.carbs_g)} · F${round1(w.fat_g)}<br>Fiber ${round1(w.fiber_g)} · Sat ${round1(w.saturated_fat_g)}`;
 
   renderWeekList(weekRows);
   await loadGoals();
@@ -2102,6 +2172,8 @@ async function loadDayLookup(){
   el("dtProtein").textContent = round1(totals.protein_g);
   el("dtCarb").textContent = round1(totals.carbs_g);
   el("dtFat").textContent = round1(totals.fat_g);
+  el("dtFiber").textContent = round1(totals.fiber_g);
+  el("dtSatFat").textContent = round1(totals.saturated_fat_g);
 
   // Calories by meal type
   const byMeal = {};
