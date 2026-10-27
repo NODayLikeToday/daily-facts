@@ -795,7 +795,92 @@
     --push:#c1401c;
     --pull:#2f6b3a;
     --legs:#3b5b92;
+    --friday:#7b4ea0;
     --walk:#b8860b;
+  }
+
+  /* Wake lock indicator */
+  .wakelock-dot{
+    display:inline-block;
+    width:7px;height:7px;
+    border-radius:50%;
+    background:var(--protein);
+    margin-left:6px;
+    vertical-align:middle;
+    opacity:0;
+    transition:opacity 0.3s;
+  }
+  .wakelock-dot.active{opacity:1;}
+
+  /* Rest timer bar */
+  #restTimerBar{
+    position:fixed;
+    bottom:0;left:0;right:0;
+    background:var(--ink);
+    color:var(--paper);
+    padding:10px 16px 14px;
+    display:none;
+    z-index:200;
+    box-shadow:0 -3px 16px rgba(0,0,0,0.18);
+    transition:background 0.3s;
+  }
+  #restTimerBar.alert{background:#c1401c;}
+  #restTimerBar.done{background:#2f6b3a;}
+  .rest-timer-inner{
+    max-width:460px;margin:0 auto;
+    display:flex;align-items:center;gap:10px;
+  }
+  .rest-timer-count{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:22px;font-weight:700;
+    min-width:60px;flex-shrink:0;
+  }
+  .rest-timer-pills{
+    display:flex;gap:6px;flex:1;flex-wrap:wrap;
+  }
+  .rest-timer-pill{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;padding:4px 8px;
+    border-radius:2px;
+    background:rgba(255,255,255,0.15);
+    color:var(--paper);
+    border:1px solid rgba(255,255,255,0.3);
+    cursor:pointer;
+  }
+  .rest-timer-pill.active{background:rgba(255,255,255,0.35);font-weight:700;}
+  .rest-timer-skip{
+    font-size:11px;padding:4px 10px;
+    background:transparent;
+    color:rgba(255,255,255,0.7);
+    border:1px solid rgba(255,255,255,0.3);
+    border-radius:2px;cursor:pointer;
+    flex-shrink:0;
+  }
+
+  /* 1RM estimate hint */
+  .e1rm-hint{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    color:var(--muted);
+    opacity:0.85;
+  }
+
+  /* Activity heatmap */
+  .heatmap-wrap{margin:18px 0 8px;}
+  .heatmap-title{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;letter-spacing:0.08em;
+    text-transform:uppercase;color:var(--muted);
+    margin-bottom:6px;
+  }
+  .heatmap-svg{width:100%;height:auto;display:block;}
+  .heatmap-legend{
+    display:flex;align-items:center;gap:6px;margin-top:4px;
+    font-size:10px;color:var(--muted);
+  }
+  .heatmap-legend-swatch{
+    width:10px;height:10px;border-radius:2px;
+    display:inline-block;
   }
   .tab-btn{font-size:11px;letter-spacing:0.08em;background:transparent;}
 
@@ -1063,6 +1148,20 @@
     </div>
   </div>
 
+  <!-- Rest timer bar (fixed bottom, shown only during active lift session) -->
+  <div id="restTimerBar">
+    <div class="rest-timer-inner">
+      <div class="rest-timer-count" id="restTimerCount">1:30</div>
+      <div class="rest-timer-pills" id="restTimerPills">
+        <button class="rest-timer-pill" data-secs="60">60s</button>
+        <button class="rest-timer-pill active" data-secs="90">90s</button>
+        <button class="rest-timer-pill" data-secs="120">2m</button>
+        <button class="rest-timer-pill" data-secs="180">3m</button>
+      </div>
+      <button class="rest-timer-skip" id="restTimerSkip">Skip</button>
+    </div>
+  </div>
+
   <!-- ===================== WALK ===================== -->
   <div id="walkTab" style="display:none;">
     <div class="capture-box">
@@ -1153,6 +1252,10 @@
         <select class="field-select" id="progressExercise" style="margin-bottom:12px;"></select>
         <div id="liftChartArea"><div class="stats-empty">Pick an exercise.</div></div>
         <div id="liftChartStats"></div>
+      </div>
+      <div class="chart-box">
+        <div class="day-lookup-header"><h2>Workout Frequency</h2></div>
+        <div id="liftHeatmap"><div class="stats-empty">Loading…</div></div>
       </div>
     </div>
 
@@ -1355,7 +1458,12 @@ function showTab(tab){
   try { localStorage.setItem("dailyFactsTab", tab); } catch (e) { /* ignore */ }
   if (new URLSearchParams(window.location.search).has("tab")) setUrlParam("tab", tab === "log" ? "food" : tab);
   if (tab === "stats") refreshActiveStats();
-  if (tab === "lift") renderLiftMain();
+  if (tab === "lift"){
+    renderLiftMain();
+    if (train.current && !train.current.finished_at){ showRestTimerBar(true); updateRestTimerDisplay(); }
+  } else {
+    showRestTimerBar(false);
+  }
   setStatus("");
 }
 
@@ -2242,34 +2350,48 @@ el("dayEntries").addEventListener("click", (e) => {
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-const PROGRAM = {
-  push: {
-    label: "Push", subtitle: "Chest · Shoulders · Triceps",
-    days: ["Monday", "Friday"], color: "#c1401c",
-    exercises: [
-      "Dumbbell Bench Press", "Dumbbell Shoulder Press", "Lateral Raises", "Dumbbell Flyes",
-      "Overhead Tricep Extension", "Tricep Kickbacks",
-      // Friday variations
-      "Incline Dumbbell Press", "Arnold Press", "Push-ups", "Skull Crushers",
-    ],
+const PROGRAMS = {
+  Nick: {
+    push: {
+      label: "Push", subtitle: "Chest · Shoulders · Triceps",
+      days: ["Monday"], color: "#c1401c",
+      exercises: [
+        "Dumbbell Bench Press", "Incline Dumbbell Press", "Dumbbell Shoulder Press",
+        "Lateral Raises", "Dumbbell Flyes", "Arnold Press",
+        "Overhead Tricep Extension", "Skull Crushers", "Tricep Kickbacks", "Push-ups",
+        "Plank", "Dead Bug",
+      ],
+    },
+    pull: {
+      label: "Pull", subtitle: "Back · Biceps · Rear Delts",
+      days: ["Tuesday"], color: "#2f6b3a",
+      exercises: [
+        "Dumbbell Rows", "Incline Dumbbell Row", "Dumbbell Pullover",
+        "Rear Delt Flyes", "Face Pulls", "Dumbbell Shrugs",
+        "Dumbbell Curl", "Hammer Curl", "Concentration Curl", "Reverse Curl",
+        "Plank", "Hollow Body Hold",
+      ],
+    },
+    legs: {
+      label: "Legs + Core", subtitle: "Quads · Hamstrings · Calves · Abs",
+      days: ["Thursday", "Saturday"], color: "#3b5b92",
+      exercises: [
+        "Goblet Squat", "Romanian Deadlift", "Reverse Lunges", "Calf Raises",
+        "Plank", "Crunches", "Leg Raises", "Bicycle Crunches", "Russian Twists",
+      ],
+    },
+    friday: {
+      label: "Push + Pull", subtitle: "Harder Dumbbell Combinations",
+      days: ["Friday"], color: "#7b4ea0",
+      exercises: [
+        "Z-Press", "Floor Press", "Renegade Rows", "Single-Arm Dumbbell Row",
+        "Zottman Curl", "Dumbbell Skull Crushers", "Dumbbell Lateral Raises",
+        "Rear Delt Flyes", "Hammer Curl", "Overhead Tricep Extension",
+        "Plank", "Russian Twists",
+      ],
+    },
   },
-  pull: {
-    label: "Pull", subtitle: "Back · Biceps · Rear Delts",
-    days: ["Tuesday", "Saturday"], color: "#2f6b3a",
-    exercises: [
-      "Dumbbell Rows", "Dumbbell Pullover", "Rear Delt Flyes", "Dumbbell Curl", "Hammer Curl",
-      // Saturday variations
-      "Incline Dumbbell Row", "Dumbbell Shrugs", "Face Pulls", "Concentration Curl", "Reverse Curl",
-    ],
-  },
-  legs: {
-    label: "Legs + Core", subtitle: "Quads · Hamstrings · Calves · Abs",
-    days: ["Thursday"], color: "#3b5b92",
-    exercises: [
-      "Goblet Squat", "Romanian Deadlift", "Reverse Lunges", "Calf Raises",
-      "Plank", "Crunches", "Leg Raises", "Bicycle Crunches", "Russian Twists",
-    ],
-  },
+  Ashleigh: null, // placeholder — will be populated when Ashleigh's plan is defined
 };
 const REST_DAYS = ["Wednesday", "Sunday"];
 const WALK_COLOR = "#b8860b";
@@ -2298,12 +2420,14 @@ const train = {
   editingWalkId: null,
 };
 
+function userProgram(){ return PROGRAMS[state.currentUser] || PROGRAMS.Nick; }
 function scheduledDayType(d = new Date()){
   const name = WEEKDAYS[d.getDay()];
   if (REST_DAYS.includes(name)) return "rest";
-  return Object.keys(PROGRAM).find(k => PROGRAM[k].days.includes(name)) || "push";
+  const prog = userProgram();
+  return Object.keys(prog).find(k => prog[k].days.includes(name)) || "push";
 }
-function programFor(type){ return PROGRAM[type] || PROGRAM.push; }
+function programFor(type){ const prog = userProgram(); return prog[type] || prog.push; }
 function daysAgoStr(n){ const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() - n); return localDateStr(d); }
 function fmtDay(ds, withYear = false){
   const opts = { weekday: "short", month: "short", day: "numeric" };
@@ -2403,6 +2527,7 @@ async function openSession(id, { quiet = false } = {}){
   train.current = sRes.data;
   train.sets = setsRes.data || [];
   train.lastTime = {};
+  if (!train.current.finished_at){ requestWakeLock(); showRestTimerBar(true); updateRestTimerDisplay(); }
   renderLiftMain();
   [...new Set(train.sets.map(s => s.exercise_name))].forEach(n => fetchLastTime(n).then(renderExGroups));
   if (!quiet) window.scrollTo({ top: 0, behavior: "smooth" });
@@ -2480,7 +2605,7 @@ function heroHtml(){
         <div class="hero-title">${escapeHtml(hero.label.toUpperCase())}</div>
         <div class="hero-sub">${escapeHtml(hero.subtitle)}</div>
         <div class="meal-select" id="liftTypePick">
-          ${Object.entries(PROGRAM).map(([k, p]) =>
+          ${Object.entries(userProgram()).map(([k, p]) =>
             `<button type="button" class="meal-pill${k === pick ? " active" : ""}" data-action="pick-type" data-type="${k}">${p.label}</button>`
           ).join("")}
         </div>
@@ -2555,8 +2680,10 @@ function renderExGroups(){
   box.innerHTML = names.map(name => {
     const sets = groups[name];
     const last = train.lastTime[name];
+    const e1rm = (last && last.weight && last.reps && Number(last.reps) >= 1 && Number(last.reps) <= 12)
+      ? Math.round(Number(last.weight) * (1 + Number(last.reps) / 30)) : null;
     const lastLine = last && last.weight
-      ? `<div class="last-time">Last time: ${round1(Number(last.weight))} lbs${last.reps ? ` × ${last.reps}` : ""}${last.date ? ` · ${fmtDay(last.date)}` : ""}</div>`
+      ? `<div class="last-time">Last time: ${round1(Number(last.weight))} lbs${last.reps ? ` × ${last.reps}` : ""}${last.date ? ` · ${fmtDay(last.date)}` : ""}${e1rm ? ` · <span class="e1rm-hint">~${e1rm} est. 1RM</span>` : ""}</div>`
       : "";
     return `
       <div class="ex-group" data-ex="${escapeAttr(name)}">
@@ -2689,6 +2816,8 @@ async function startWorkout(dayType, templateId = null){
   train.current = data;
   train.sets = [];
   train.lastTime = {};
+  requestWakeLock();
+  showRestTimerBar(true); updateRestTimerDisplay();
   let copied = 0;
   if (templateId) copied = await copySetsFrom(templateId, data.id);
   renderLiftMain();
@@ -2750,6 +2879,7 @@ async function addSet(name){
   train.sets.push(data);
   renderExGroups();
   renderSessionList();
+  startRestTimer(); // kick off the rest timer whenever a set is logged
   if (el("exSelect")) { el("exSelect").value = ""; el("customExRow").style.display = "none"; el("customEx").value = ""; }
   setStatus("");
 }
@@ -2764,6 +2894,8 @@ async function finishWorkout(){
   }
   const n = train.sets.length;
   train.current = null; train.sets = []; train.lastTime = {};
+  releaseWakeLock();
+  stopRestTimer();
   renderLiftMain();
   setStatus(`Workout saved — ${n} set${n !== 1 ? "s" : ""}.`);
   loadSessions();
@@ -2780,6 +2912,8 @@ async function deleteSession(){
   const { error } = await supabaseClient.from("workout_sessions").delete().eq("id", id);
   if (error) { setStatus("Delete failed: " + error.message, true); return; }
   train.current = null; train.sets = [];
+  releaseWakeLock();
+  stopRestTimer();
   renderLiftMain();
   setStatus("Workout deleted.");
   loadSessions();
@@ -2966,7 +3100,7 @@ async function refreshLiftStats(){
 
   // Exercise picker: everything in the program plus any custom lifts logged.
   const logged = new Set(liftHistory.map(s => s.name));
-  const all = [...new Set([...Object.values(PROGRAM).flatMap(p => p.exercises), ...logged])].sort();
+  const all = [...new Set([...Object.values(userProgram()).flatMap(p => p.exercises), ...logged])].sort();
   const sel = el("progressExercise");
   let chosen = sel.value;
   if (!chosen || !all.includes(chosen)) {
@@ -2976,6 +3110,84 @@ async function refreshLiftStats(){
   sel.innerHTML = `<option value="">— Choose exercise —</option>` +
     all.map(n => `<option value="${escapeAttr(n)}"${n === chosen ? " selected" : ""}>${escapeHtml(n)}${logged.has(n) ? "" : " (no data)"}</option>`).join("");
   renderLiftChart();
+
+  // Activity heatmap: year view
+  renderActivityHeatmap(sessRes.data || []);
+}
+
+function renderActivityHeatmap(sessions){
+  const box = el("liftHeatmap");
+  if (!box) return;
+
+  // Build date → count map from all-time sessions (we only have 30d here; enough to show the grid shape)
+  // We'll pass what we have; empty cells just show as blank
+  const countByDate = {};
+  sessions.forEach(s => { countByDate[s.session_date] = (countByDate[s.session_date] || 0) + 1; });
+
+  const COLS = 53, ROWS = 7;
+  const CW = 11, CH = 11, GAP = 2; // cell width, height, gap
+  const LEFT_PAD = 22, TOP_PAD = 14; // space for day/month labels
+  const W = LEFT_PAD + COLS * (CW + GAP), H = TOP_PAD + ROWS * (CH + GAP);
+
+  // Compute the start date: the Sunday of the week 52 weeks ago
+  const today = new Date(); today.setHours(12, 0, 0, 0);
+  const startDate = new Date(today);
+  startDate.setDate(startDate.getDate() - 364 - startDate.getDay()); // back to nearest past Sunday
+
+  const COLOR_EMPTY = "#e6e1d6";
+  const COLOR_LEVELS = ["#b9d4f4", "#6aaae8", "#2f6b8a", "#1a3f5c"]; // 1, 2, 3, 4+ sessions
+
+  function cellColor(count){
+    if (!count) return COLOR_EMPTY;
+    if (count === 1) return COLOR_LEVELS[0];
+    if (count === 2) return COLOR_LEVELS[1];
+    if (count === 3) return COLOR_LEVELS[2];
+    return COLOR_LEVELS[3];
+  }
+
+  let cells = "";
+  const monthsSeen = {};
+  for (let col = 0; col < COLS; col++){
+    for (let row = 0; row < ROWS; row++){
+      const d = new Date(startDate);
+      d.setDate(startDate.getDate() + col * 7 + row);
+      if (d > today) continue;
+      const ds = d.toISOString().slice(0, 10);
+      const count = countByDate[ds] || 0;
+      const x = LEFT_PAD + col * (CW + GAP);
+      const y = TOP_PAD + row * (CH + GAP);
+      const label = `${d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}: ${count} workout${count !== 1 ? "s" : ""}`;
+      cells += `<rect x="${x}" y="${y}" width="${CW}" height="${CH}" rx="2" fill="${cellColor(count)}" title="${label}" />`;
+      // Month label on the first row of each new month
+      if (row === 0){
+        const mk = `${d.getFullYear()}-${d.getMonth()}`;
+        if (!monthsSeen[mk]){
+          monthsSeen[mk] = true;
+          const mLabel = d.toLocaleDateString(undefined, { month: "short" });
+          cells += `<text x="${x}" y="${TOP_PAD - 3}" font-size="9" fill="#6b6558" font-family="IBM Plex Mono, monospace">${mLabel}</text>`;
+        }
+      }
+    }
+  }
+
+  // Day-of-week labels
+  const dayLabels = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+  const dayLabelsSvg = [1, 3, 5].map(row =>
+    `<text x="${LEFT_PAD - 4}" y="${TOP_PAD + row * (CH + GAP) + CH - 2}" font-size="9" fill="#6b6558" font-family="IBM Plex Mono, monospace" text-anchor="end">${dayLabels[row]}</text>`
+  ).join("");
+
+  box.innerHTML = `
+    <div class="heatmap-wrap">
+      <div class="heatmap-title">Workouts — past year</div>
+      <svg class="heatmap-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+        ${dayLabelsSvg}${cells}
+      </svg>
+      <div class="heatmap-legend">
+        <span>Less</span>
+        ${[COLOR_EMPTY, ...COLOR_LEVELS].map(c => `<span class="heatmap-legend-swatch" style="background:${c}"></span>`).join("")}
+        <span>More</span>
+      </div>
+    </div>`;
 }
 
 el("progressExercise").addEventListener("change", () => {
@@ -2998,7 +3210,7 @@ function renderLiftChart(){
   if (!points.length) { area.innerHTML = `<div class="stats-empty">No sets logged for ${escapeHtml(name)} yet.</div>`; return; }
   area.innerHTML = '<div class="chart-wrap"><canvas id="liftChart"></canvas></div>';
   liftChart = makeChart(el("liftChart"), "line",
-    points.map(([d]) => fmtDay(d).replace(/^\w+, /, "")), points.map(([, w]) => w), PROGRAM.push.color, "lbs");
+    points.map(([d]) => fmtDay(d).replace(/^\w+, /, "")), points.map(([, w]) => w), userProgram().push.color, "lbs");
   const first = points[0][1], last = points[points.length - 1][1];
   const best = Math.max(...points.map(([, w]) => w));
   const diff = round1(last - first);
@@ -3049,6 +3261,121 @@ async function refreshWalkStats(){
     ${statCard("Avg walk", walks.length ? round1(total / walks.length) : 0, "mi")}
     ${statCard("Longest", round1(best), "mi", WALK_COLOR)}`;
 }
+
+// =====================================================================
+// SCREEN WAKE LOCK — keep screen on during active workouts
+// =====================================================================
+let wakeLockSentinel = null;
+let wakeLockWanted = false;
+
+async function requestWakeLock(){
+  if (!("wakeLock" in navigator)) return;
+  wakeLockWanted = true;
+  try {
+    wakeLockSentinel = await navigator.wakeLock.request("screen");
+    wakeLockSentinel.addEventListener("release", () => { wakeLockSentinel = null; });
+  } catch (e) {
+    console.warn("Wake lock failed:", e.message);
+  }
+}
+function releaseWakeLock(){
+  wakeLockWanted = false;
+  if (wakeLockSentinel){ wakeLockSentinel.release(); wakeLockSentinel = null; }
+}
+// Re-acquire when tab comes back into view (system releases on visibility change)
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && wakeLockWanted && !wakeLockSentinel){
+    requestWakeLock();
+  }
+});
+
+// =====================================================================
+// REST TIMER
+// =====================================================================
+const restTimer = {
+  duration: 90,  // currently selected duration in seconds
+  remaining: 0,
+  intervalId: null,
+  running: false,
+};
+
+function restTimerVisible(){
+  return !!train.current && document.getElementById("liftTab") &&
+    document.getElementById("liftTab").style.display !== "none";
+}
+
+function showRestTimerBar(show){
+  const bar = el("restTimerBar");
+  if (!bar) return;
+  bar.style.display = show ? "block" : "none";
+  // Add bottom padding to app so the bar doesn't overlap content
+  const app = document.querySelector(".app");
+  if (app) app.style.paddingBottom = show ? "80px" : "60px";
+}
+
+function updateRestTimerDisplay(){
+  const el_count = el("restTimerCount");
+  if (!el_count) return;
+  const m = Math.floor(restTimer.remaining / 60);
+  const s = restTimer.remaining % 60;
+  el_count.textContent = `${m}:${String(s).padStart(2, "0")}`;
+  const bar = el("restTimerBar");
+  if (bar){
+    bar.classList.remove("alert", "done");
+    if (restTimer.remaining <= 5 && restTimer.running) bar.classList.add("alert");
+  }
+}
+
+function startRestTimer(){
+  if (restTimer.intervalId) clearInterval(restTimer.intervalId);
+  restTimer.remaining = restTimer.duration;
+  restTimer.running = true;
+  const bar = el("restTimerBar");
+  if (bar){ bar.classList.remove("alert", "done"); }
+  updateRestTimerDisplay();
+  showRestTimerBar(true);
+  restTimer.intervalId = setInterval(() => {
+    if (restTimer.remaining > 0){
+      restTimer.remaining--;
+      updateRestTimerDisplay();
+      if (restTimer.remaining === 0) onRestTimerDone();
+    }
+  }, 1000);
+}
+
+function onRestTimerDone(){
+  restTimer.running = false;
+  if (restTimer.intervalId){ clearInterval(restTimer.intervalId); restTimer.intervalId = null; }
+  const bar = el("restTimerBar");
+  if (bar){ bar.classList.remove("alert"); bar.classList.add("done"); }
+  const el_count = el("restTimerCount"); if (el_count) el_count.textContent = "Go!";
+  // Vibrate: two short pulses
+  if ("vibrate" in navigator){ try { navigator.vibrate([200, 100, 200]); } catch (e) { /* ignore */ } }
+  // Auto-hide after 3 seconds
+  setTimeout(() => { if (!restTimer.running) showRestTimerBar(false); }, 3000);
+}
+
+function stopRestTimer(){
+  restTimer.running = false;
+  if (restTimer.intervalId){ clearInterval(restTimer.intervalId); restTimer.intervalId = null; }
+  showRestTimerBar(false);
+}
+
+// Wire up the rest timer bar controls
+document.addEventListener("DOMContentLoaded", () => {
+  const bar = el("restTimerBar");
+  if (!bar) return;
+  bar.addEventListener("click", (e) => {
+    const pill = e.target.closest(".rest-timer-pill");
+    if (pill){
+      restTimer.duration = parseInt(pill.dataset.secs, 10);
+      bar.querySelectorAll(".rest-timer-pill").forEach(p => p.classList.toggle("active", p === pill));
+      startRestTimer();
+      return;
+    }
+    if (e.target.id === "restTimerSkip") { stopRestTimer(); }
+  });
+});
 
 // ---- User switching + boot ----
 async function onTrainingUserChange(){
